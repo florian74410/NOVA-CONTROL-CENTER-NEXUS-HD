@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, Signal, QObject, QSize, QRectF, QPoint, QEvent, Q
 from PySide6.QtGui import QFont, QKeySequence, QAction, QPainter, QIcon, QMovie, QPen, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout,
-    QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame, QWidgetAction
+    QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame, QWidgetAction, QStackedWidget
 )
 from .nexus_theme import PALETTES
 from .nexus_v2_paint import vector_icon, draw_frame
@@ -24,6 +24,7 @@ from .connection_session_cache import ConnectionSessionCache
 from .connection_manager_ui import ConnectionManagerDialog
 from .n3xv5_bridge import N3XV5Host
 from .native_apps_ui import NativeAppsDialog
+from .grid_engine import GridView
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -287,6 +288,13 @@ class MainWindow(QMainWindow):
             lambda pos: self.make_menu().exec(self.catalog.mapToGlobal(pos))
         )
         left.addWidget(self.catalog,1)
+        self.vps_button=QPushButton("▦  VPS IATB")
+        self.vps_menu=QMenu(self.vps_button)
+        for category in ("Vitalité","Actions","Services","Journaux","Réseau"):
+            action=self.vps_menu.addAction(category)
+            action.triggered.connect(lambda checked=False, name=category: self.open_vps_category(name))
+        self.vps_button.setMenu(self.vps_menu)
+        left.addWidget(self.vps_button)
         self.empty_catalog=QLabel("Aucun module installé.\n\nAjoute une application Qt\npour la voir ici.")
         self.empty_catalog.setWordWrap(True)
         self.empty_catalog.setObjectName("hint")
@@ -315,7 +323,11 @@ class MainWindow(QMainWindow):
         self.desktop.customContextMenuRequested.connect(
             lambda pos: self.make_menu().exec(self.desktop.mapToGlobal(pos))
         )
-        splitter.addWidget(self.desktop)
+        self.grid_view=GridView(self)
+        self.workspace_stack=QStackedWidget(self)
+        self.workspace_stack.addWidget(self.desktop)
+        self.workspace_stack.addWidget(self.grid_view)
+        splitter.addWidget(self.workspace_stack)
         splitter.setStretchFactor(1,1)
         splitter.setSizes([223,1200])
         self.splitter=splitter
@@ -370,6 +382,15 @@ class MainWindow(QMainWindow):
     def toggle_maximized(self):
         if self.isMaximized():self.showNormal()
         else:self.showMaximized()
+    def open_vps_category(self,category):
+        # Placeholder category until IATB-CLI catalog has been mapped.
+        tile=self.grid_view.grid.add_tile("VPS IATB / "+category,2,3)
+        self.workspace_stack.setCurrentWidget(self.grid_view)
+        if tile is None:
+            self.notifications.add("Grille pleine : aucune zone 2 x 3 disponible.","warning")
+        else:
+            self.notifications.add("Widget VPS IATB / "+category+" créé.","success")
+
     def open_application(self,app_id):
         if app_id not in self.desktop.registry:return
         self.desktop.open_app(app_id)
