@@ -34,6 +34,34 @@ jobs:
             N3XV5/Applications/NexusNetTrace/nettrace.py
           dist/n3xv5-nettrace --help
           dist/n3xv5-nettrace dns localhost
+      - name: Verify both engines from frozen binary against local HTTP server
+        run: |
+          python - <<'PY'
+          import http.server,threading,subprocess,json
+          class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+              self.send_response(502)
+              self.send_header("X-Request-ID",self.headers.get("X-Request-ID","missing"))
+              self.end_headers()
+              self.wfile.write(b"gateway")
+            def log_message(self,*args):pass
+          srv=http.server.HTTPServer(("127.0.0.1",0),Handler)
+          thr=threading.Thread(target=srv.serve_forever,daemon=True)
+          thr.start()
+          try:
+            for engine in ("stdlib","curl"):
+              cmd=["dist/n3xv5-nettrace","--json","probe",
+                   f"http://127.0.0.1:{srv.server_port}/api/health",
+                   "--engine",engine]
+              p=subprocess.run(cmd,capture_output=True,text=True,timeout=15)
+              assert p.returncode==0,(engine,p.stdout,p.stderr)
+              result=json.loads(p.stdout)
+              assert result["status"]==502,(engine,result)
+              assert "x-request-id" in result["response_headers"],(engine,result)
+              print(engine,"verified: HTTP 502 with correlation ID")
+          finally:
+            srv.shutdown();thr.join(3);srv.server_close()
+          PY
       - name: Package independent Linux .deb for N3XV5 HUB
         run: |
           set -euo pipefail
