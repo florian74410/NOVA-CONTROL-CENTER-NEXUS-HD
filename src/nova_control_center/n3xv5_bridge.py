@@ -28,14 +28,15 @@ def manifest_from_json(content):
         dependencies=tuple(content.get("dependencies",[]))))
 
 class N3XV5Host:
-    def __init__(self,profile_store,connection_cache,session_manager,root=None):
+    def __init__(self,profile_store,connection_cache,session_manager,root=None,event_callback=None):
         if os.name!="posix":raise NotImplementedError("Qt bridge Linux first")
         self.profile_store=profile_store
         self.connection_cache=connection_cache
         self.session_manager=session_manager
         self.package_manager=NativePackageManager(
             root or Path.home()/".local"/"share"/"n3xv5-n0v4-hud",Platform.LINUX_X64)
-        self.broker=LocalAppBroker(self._active_profile,self._connections)
+        self.broker=LocalAppBroker(self._active_profile,self._connections,
+                                   event_callback=event_callback)
 
     def _active_profile(self):
         if self.session_manager.session.locked:
@@ -57,11 +58,11 @@ class N3XV5Host:
         # Called only after explicit UI authorization. Persist as local account.
         self.profile_store.grant(app_id,capabilities)
 
-    def launch(self,app_id,executable):
+    def launch(self,app_id,executable,extra_args=()):
         records=self.package_manager.list()
         if app_id not in records:raise KeyError("App is not registered")
         record=records[app_id]
         if record["state"]!="installed":
             raise PermissionError("Install native package through OS first")
         manifest=manifest_from_json(record["manifest"])
-        return self.broker.launch(manifest,executable)
+        return self.broker.launch(manifest,executable,extra_args=extra_args)
