@@ -26,6 +26,7 @@ from .n3xv5_bridge import N3XV5Host
 from .native_apps_ui import NativeAppsDialog
 from .grid_engine import GridView, DisplayItem
 from .iatb_socket_client import HubSocketClient
+from .cli_cache import CliCacheManager
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -326,11 +327,13 @@ class MainWindow(QMainWindow):
         )
         self.grid_view=GridView(self)
         self.iatb_socket=HubSocketClient(parent=self)
-        self.iatb_socket.result.connect(self._on_iatb_result)
-        self.iatb_socket.failed.connect(self._on_iatb_error)
+        self.cli_cache=CliCacheManager(parent=self)
+        self.cli_cache.register('iatb-cli',self.iatb_socket)
+        self.cli_cache.updated.connect(self._on_cli_cache_updated)
+        self.cli_cache.failed.connect(self._on_cli_cache_error)
         self.iatb_tiles={}
         self.iatb_poll=QTimer(self)
-        self.iatb_poll.setInterval(10000)
+        self.iatb_poll.setInterval(60000)
         self.iatb_poll.timeout.connect(self._poll_iatb)
         self.iatb_poll.start()
         self.workspace_stack=QStackedWidget(self)
@@ -409,39 +412,36 @@ class MainWindow(QMainWindow):
         self._poll_iatb()
 
     def _poll_iatb(self):
-        # One CLI socket request per method, shared by all matching widgets.
-        methods=set()
+        names=set()
         for key,info in list(self.iatb_tiles.items()):
             if key not in self.grid_view.grid.tiles:
                 self.iatb_tiles.pop(key,None)
             else:
-                methods.update(info["methods"])
-        for method in sorted(methods):
-            self.iatb_socket.request(method)
+                names.update(info["methods"])
+        if names:
+            self.cli_cache.get("iatb-cli",sorted(names))
 
-    def _on_iatb_result(self,method,result):
+    def _on_cli_cache_updated(self,app_id,values):
+        if app_id != "iatb-cli":
+            return
         for key,info in list(self.iatb_tiles.items()):
             tile=self.grid_view.grid.tiles.get(key)
-            if tile is None or method not in info["methods"]:
+            if tile is None:
                 continue
-            values=result.get("items") if isinstance(result,dict) else None
-            if not isinstance(values,list):
-                values=[{"label":method,"value":str(result),"priority":1}]
-            info["results"][method]=[
-                DisplayItem(str(item.get("label",method)),
-                            str(item.get("value","")).strip().replace("\\n"," | ")[:250],
-                            int(item.get("priority",1)))
-                for item in values if isinstance(item,dict)]
-            tile.set_data([item for name in info["methods"]
-                           for item in info["results"].get(name,[])])
+            items=[]
+            for name in info["methods"]:
+                item=values.get(name)
+                if item is not None:
+                    value=str(item.get("value","")).strip().replace("\\n"," | ")[:200]
+                    if item.get("stale"):
+                        value += " (cache)"
+                    items.append(DisplayItem(name,value,int(item.get("priority",1))))
+            if items:
+                tile.set_data(items)
 
-    def _on_iatb_error(self,method,error):
-        for key,info in self.iatb_tiles.items():
-            tile=self.grid_view.grid.tiles.get(key)
-            if tile is not None and method in info["methods"]:
-                info["results"][method]=[DisplayItem(method,"Indisponible : "+error[:80],1)]
-                tile.set_data([item for name in info["methods"]
-                               for item in info["results"].get(name,[])])
+    def _on_cli_cache_error(self,app_id,error):
+        if app_id == "iatb-cli":
+            self.status_info.setText("IATB-CLI : connexion en attente")
 
     def open_application(self,app_id):
         if app_id not in self.desktop.registry:return
