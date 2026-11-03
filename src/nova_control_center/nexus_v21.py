@@ -120,6 +120,7 @@ class MainWindow(QMainWindow):
         self.preferences_store=PreferencesStore()
         self.preferences=self.preferences_store.load()
         self.log_store=LogStore()
+        self.log_store.prune(self.preferences.log_retention_days,self.preferences.log_max_records)
         self.session_manager=SessionManager()
         self.registry=ApplicationRegistry()  # zero fake modules
         self.state=self.load_state()
