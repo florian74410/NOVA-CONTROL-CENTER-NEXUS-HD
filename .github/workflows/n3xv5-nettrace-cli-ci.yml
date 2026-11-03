@@ -1,0 +1,90 @@
+name: N3XV5 NetTrace CLI - tests and portable Linux package
+on:
+  push:
+    branches: [work/n3xv5-nettrace-cli-v1]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nettrace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test privacy and local network diagnosis (no external targets)
+        run: |
+          python -m pip install pytest pyinstaller==6.16.0
+          python -m compileall -q N3XV5/Applications/NexusNetTrace
+          python -m pytest -q tests/test_n3xv5_nettrace.py
+      - name: Create pure Python zipapp (stdlib only)
+        run: |
+          mkdir -p dist
+          python -m zipapp N3XV5/Applications/NexusNetTrace -m 'nettrace:main' -o dist/n3xv5-nettrace.pyz
+          python dist/n3xv5-nettrace.pyz --help
+      - name: Build native portable Linux CLI with embedded Python
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile \
+            --name n3xv5-nettrace \
+            --paths N3XV5/Core \
+            --collect-submodules n3xv5_core \
+            N3XV5/Applications/NexusNetTrace/nettrace.py
+          dist/n3xv5-nettrace --help
+          dist/n3xv5-nettrace dns localhost
+      - name: Package independent Linux .deb for N3XV5 HUB
+        run: |
+          set -euo pipefail
+          PKG="$RUNNER_TEMP/n3xv5-nettrace"
+          mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin"
+          install -m 755 dist/n3xv5-nettrace "$PKG/usr/bin/n3xv5-nettrace"
+          cat > "$PKG/DEBIAN/control" <<EOF
+          Package: n3xv5-nettrace
+          Version: 0.1.0~dev1
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: N3XV5 Project
+          Depends: libc6
+          Description: N3XV5 NetTrace network diagnostics CLI
+           Offline-capable HTTPS/TCP/TLS/DNS diagnostics, HAR and VPS log correlation.
+          EOF
+          dpkg-deb --build --root-owner-group "$PKG" dist/n3xv5-nettrace_0.1.0_amd64.deb
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          f=Path("dist/n3xv5-nettrace_0.1.0_amd64.deb")
+          digest=hashlib.sha256(f.read_bytes()).hexdigest()
+          manifest={
+            "app_id":"nexus-nettrace",
+            "name":"N3XV5 NetTrace CLI",
+            "version":"0.1.0",
+            "platform":"linux-x64",
+            "package_name":f.name,
+            "package_sha256":digest,
+            "executable":"bin/n3xv5-nettrace",
+            "ipc_api":1,
+            "capabilities":["profile.read","connections.read"],
+            "dependencies":[]
+          }
+          Path("dist/n3xv5-nettrace.manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
+          with Path("dist/SHA256SUMS.txt").open("w") as out:
+            for path in sorted(Path("dist").glob("*")):
+              if path.is_file() and path.name!="SHA256SUMS.txt":
+                h=hashlib.sha256(path.read_bytes()).hexdigest()
+                out.write(f"{h}  {path.name}\n")
+          print("Manifest SHA256 =",digest)
+          PY
+          dpkg-deb --info dist/n3xv5-nettrace_0.1.0_amd64.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: N3XV5-NetTrace-CLI-0.1.0-Linux-amd64
+          path: |
+            dist/n3xv5-nettrace
+            dist/n3xv5-nettrace.pyz
+            dist/n3xv5-nettrace_0.1.0_amd64.deb
+            dist/n3xv5-nettrace.manifest.json
+            dist/SHA256SUMS.txt
+          retention-days: 30
