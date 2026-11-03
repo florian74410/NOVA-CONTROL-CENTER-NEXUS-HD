@@ -1,0 +1,1 @@
+# Ajouter ici les SHA-256 des fichiers fournis, un par ligne, format sha256sum.

@@ -1,0 +1,22 @@
+name: N3XV5 shared profiles and minimal Live ISO staging
+on:
+  push:
+    branches: [work/n3xv5-suite-shared-profiles-live-iso]
+  pull_request:
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
+      - run: |
+          python -m pip install -e '.[test]'
+          python -m compileall -q src deploy
+          python -m pytest -q tests/test_suite_portability.py tests/test_connection_preload.py tests/test_core_services.py

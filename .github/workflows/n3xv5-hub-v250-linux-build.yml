@@ -1,0 +1,87 @@
+name: N3XV5 HUB 2.5 Linux Qt / IPC / Native Apps
+on:
+  push:
+    branches: [work/n3xv5-phase2-4-hub-auth-apps, work/n3xv5-grid-cli-protocol-v260]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install native Qt dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxcb-randr0 libxkbcommon0 dpkg-dev
+      - name: Verify current Core and package
+        run: |
+          python -m pip install --upgrade pip build pytest pytest-qt
+          python -m pip install -e '.[test]'
+          python -m compileall -q src
+          PYTHONPATH=N3XV5/Core python -m pytest -q tests/test_connection_preload.py tests/test_core_services.py tests/test_control_panels.py tests/test_nexus_crashfix.py tests/test_suite_portability.py tests/test_n3xv5_hub_phase234.py tests/test_n3xv5_cli_grid.py N3XV5/tests/test_foundation.py
+          python -m build --wheel --outdir dist
+      - name: Compile standalone Linux binary
+        run: |
+          python -m pip install 'pyinstaller>=6.10,<7'
+          ASSET_ARGS=()
+          if [ -d Assets ]; then ASSET_ARGS=(--add-data "Assets:Assets"); fi
+          python -m PyInstaller --noconfirm --clean --onedir --name nova-control-center --paths "$PWD/src" --paths "$PWD/N3XV5/Core" --hidden-import nova_control_center.nexus_v21 --hidden-import n3xv5_core.ipc --collect-submodules nova_control_center --collect-submodules n3xv5_core "${ASSET_ARGS[@]}" build/nova_entry.py
+      - name: Smoke test standalone Linux binary
+        run: |
+          timeout 12s dist/nova-control-center/nova-control-center --help >/tmp/nova-smoke.log 2>&1 || CODE=$?
+          # The application has no --help handler; a long-lived GUI process is expected.
+          if [ "${CODE:-0}" -ne 0 ] && [ "${CODE:-0}" -ne 124 ]; then cat /tmp/nova-smoke.log; exit 1; fi
+          if grep -E 'Traceback|ModuleNotFoundError|ImportError|Segmentation fault' /tmp/nova-smoke.log; then exit 1; fi
+      - name: Package DEB
+        run: |
+          set -euo pipefail
+          VERSION=2.5.0~dev0
+          PKG="$RUNNER_TEMP/nova-control-center-deb"
+          mkdir -p "$PKG/DEBIAN" "$PKG/opt/nova-control-center" "$PKG/usr/bin" "$PKG/usr/share/applications"
+          cp -a dist/nova-control-center/. "$PKG/opt/nova-control-center/"
+          cat > "$PKG/DEBIAN/control" <<EOF
+          Package: nova-control-center
+          Version: $VERSION
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: NOVA Project
+          Depends: libc6, libegl1, libopengl0, libxkbcommon0, libxcb-cursor0
+          Description: N3XV5 N0v4 HUD - Linux Qt Hub development preview
+           Native Qt control center with local session and multi-protocol profiles.
+          EOF
+          cat > "$PKG/usr/bin/nova-control-center" <<'EOF'
+          #!/bin/sh
+          exec /opt/nova-control-center/nova-control-center "$@"
+          EOF
+          chmod 755 "$PKG/usr/bin/nova-control-center"
+          cat > "$PKG/usr/share/applications/nova-control-center.desktop" <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=NOVA Control Center
+          Comment=NEXUS HD multi-application control center
+          Exec=nova-control-center
+          Terminal=false
+          Categories=Development;System;
+          StartupNotify=true
+          EOF
+          dpkg-deb --build --root-owner-group "$PKG" "dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb"
+          dpkg-deb --info dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb
+          sha256sum dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb dist/*.whl > dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-Control-Center-2.5.0-dev0-Linux-amd64
+          path: |
+            dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb
+            dist/*.whl
+            dist/SHA256SUMS.txt
+          retention-days: 30
