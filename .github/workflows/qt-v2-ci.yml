@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       QT_QPA_PLATFORM: offscreen
+      NOVA_SCREENSHOT_DIR: v2-preview
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,3 +26,11 @@ jobs:
         run: python -m compileall -q src tests
       - name: Test V2
         run: python -m pytest -q tests/test_nexus_v2.py
+
+      - name: Save V2 Qt screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-v2-qt-preview
+          path: v2-preview/nova-v2-qt-render.png
+          if-no-files-found: warn
