@@ -142,6 +142,14 @@ class NovaDialog(QDialog):
             p.drawLine(int(ax),int(yy),int(ax+36),int(yy))
             p.drawLine(int(ax+36),int(yy),int(ax+47),int(yy+11))
             p.drawLine(int(ax+47),int(yy+11),int(ax+86),int(yy+11))
+        # Fine red side traces with gentle pulse; don't alter the blue main frame.
+        pulse=65+int(55*__import__("math").sin(__import__("time").monotonic()*1.3)**2)
+        red=QColor("#FF4056")
+        red.setAlpha(pulse)
+        p.setPen(QPen(red,1.35))
+        if h>90:
+            p.drawLine(x+3,y+45,x+3,y+min(h-35,115))
+            p.drawLine(x+w-3,y+h-115,x+w-3,y+h-45)
         p.end()
     def mousePressEvent(self,event):
         if event.button()==Qt.MouseButton.LeftButton and event.position().y()<63:
