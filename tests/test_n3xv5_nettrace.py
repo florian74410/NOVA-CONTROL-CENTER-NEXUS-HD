@@ -101,3 +101,31 @@ def test_cli_help_and_cli_bad_url(capsys):
     assert nettrace.main(["probe","file:///tmp/passwords"])==2
     captured=capsys.readouterr()
     assert "file:///tmp/passwords" not in captured.err
+
+def test_stdlib_probe_local_http_server():
+    import http.server
+    import threading
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(502)
+            self.send_header("X-Request-ID",self.headers.get("X-Request-ID","missing"))
+            self.send_header("Set-Cookie","secret=VERY_PRIVATE")
+            self.end_headers()
+            self.wfile.write(b"backend failed")
+        def log_message(self,*args):
+            return
+    server=http.server.HTTPServer(("127.0.0.1",0),Handler)
+    thread=threading.Thread(target=server.serve_forever,daemon=True)
+    thread.start()
+    try:
+        url="http://127.0.0.1:%d/api?token=PRIVATE" % server.server_port
+        result=nettrace.probe_stdlib(url,request_id="n3xv5-local-test")
+        assert result["status"]==502, result
+        assert result["diagnosis"]["issue"]=="gateway_or_upstream"
+        assert result["response_headers"]["x-request-id"]=="n3xv5-local-test"
+        assert "PRIVATE" not in json.dumps(result)
+        assert result["timings_ms"]["starttransfer_ms"]>=0
+    finally:
+        server.shutdown()
+        thread.join(3)
+        server.server_close()
