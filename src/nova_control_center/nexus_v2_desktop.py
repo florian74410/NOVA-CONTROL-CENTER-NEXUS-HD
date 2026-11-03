@@ -1,6 +1,6 @@
 """NEXUS NOVA HD V2: frameless native MDI with painted frames and app catalog."""
 from PySide6.QtCore import Qt, Signal, QMimeData, QPoint, QRectF, QTimer
-from PySide6.QtGui import QDrag, QPainter, QPen, QBrush, QColor
+from PySide6.QtGui import QDrag, QPainter, QPen, QBrush, QColor, QPixmap, QLinearGradient, QRadialGradient, QPainterPath
 from PySide6.QtWidgets import (
     QWidget, QMdiArea, QMdiSubWindow, QListWidget, QListWidgetItem,
     QLabel, QFrame, QPushButton, QHBoxLayout, QVBoxLayout, QLayout
@@ -187,13 +187,51 @@ class NexusDesktop(QMdiArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setStyleSheet("QMdiArea{border:0;background:#07101C;}")
         self._base_color=palette.background
-        self.setBackground(QBrush(QColor(palette.background)))
+        self._update_wallpaper()
         self.subWindowActivated.connect(lambda _:self.number_changed.emit(len(self.subWindowList())))
         self.timer=QTimer(self)
         self.timer.setInterval(50)  # 20fps single active border only
         self.timer.timeout.connect(self._tick)
         self.timer.start()
         self.effect_enabled=True
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        self._update_wallpaper()
+
+    def _update_wallpaper(self):
+        """Render abstract PCB texture once per resize/theme change, not every frame."""
+        width=max(1,self.viewport().width())
+        height=max(1,self.viewport().height())
+        pix=QPixmap(width,height)
+        pix.fill(QColor(self.palette.background))
+        p=QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        grad=QRadialGradient(width*.63,height*.28,max(1,width*.75))
+        color=QColor(self.palette.accent)
+        color.setAlpha(44)
+        grad.setColorAt(0,color)
+        grad.setColorAt(.7,QColor(7,17,31,40))
+        grad.setColorAt(1,QColor(7,17,31,0))
+        p.fillRect(0,0,width,height,grad)
+        for i in range(33):
+            side=i%2
+            xx=22+(i*43)%max(1,int(width*.38))
+            yy=14+(i*61)%max(1,height)
+            x=xx if side==0 else width-xx
+            sign=1 if side==0 else -1
+            c=QColor(self.palette.accent)
+            c.setAlpha(18+((i*17)%58))
+            p.setPen(QPen(c,1.2))
+            route=QPainterPath()
+            route.moveTo(x,yy)
+            route.lineTo(x+sign*(18+i%4*6),yy)
+            route.lineTo(x+sign*(36+i%4*6),yy+18)
+            route.lineTo(x+sign*(116+i%5*13),yy+18)
+            p.drawPath(route)
+            p.drawEllipse(x+sign*(116+i%5*13)-2,yy+16,4,4)
+        p.end()
+        self.setBackground(QBrush(pix))
+
     def _tick(self):
         if not self.effect_enabled or not self.isVisible(): return
         active=self.activeSubWindow()
@@ -202,7 +240,7 @@ class NexusDesktop(QMdiArea):
             active.update()
     def set_palette(self,palette):
         self.palette=palette
-        self.setBackground(QBrush(QColor(palette.background)))
+        self._update_wallpaper()
         for win in self.subWindowList():
             if isinstance(win,NexusSubWindow): win.set_palette(palette)
     def open_app(self,app_id,pos=None):
