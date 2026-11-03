@@ -4,17 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-control-center"
-version = "0.1.0"
-description = "Native Linux multi-application desktop workspace"
+version = "1.0.0.dev0"
+description = "NEXUS HD full-Qt Linux multi-application control center"
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.6,<7"]
 
 [project.optional-dependencies]
-web = ["PySide6-Addons>=6.6,<7"]
 test = ["pytest>=8", "pytest-qt>=4.4"]
 
 [project.scripts]
-nova-control-center = "nova_control_center.main:main"
+nova-control-center = "nova_control_center.nexus_v1:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
