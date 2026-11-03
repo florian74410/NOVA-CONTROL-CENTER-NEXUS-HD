@@ -22,6 +22,7 @@ from .core_dialogs import LogsDialog, CorePreferencesDialog, UnlockDialog
 from .connection_registry import UserConnectionRegistry
 from .connection_session_cache import ConnectionSessionCache
 from .connection_manager_ui import ConnectionManagerDialog
+from .online_updates import UpdateDialog, UpdateWorker, newer
 
 SETTINGS = Path.home()/".config"/"nova-control-center"/"v21.json"
 INSTALLED = Path.home()/".local"/"share"/"nova-control-center"/"Applications"/"Installed"
@@ -174,6 +175,7 @@ class MainWindow(QMainWindow):
         self._idle_timer.timeout.connect(self._check_idle_lock)
         self._idle_timer.start()
         QApplication.instance().installEventFilter(self)
+        QTimer.singleShot(2500,self._start_update_check)
         if self.session_manager.has_pin():
             self.session_manager.lock()
             self.connection_cache.invalidate()
@@ -215,6 +217,7 @@ class MainWindow(QMainWindow):
             ("Sessions","shield",self.show_sessions),
             ("Créer une connexion","plug",self.show_connection_manager),
             ("Journaux","list",self.show_logs),
+            ("Mises à jour","refresh",self.show_updates),
         ):
             btn=QPushButton(label)
             btn.setObjectName("iconNav")
@@ -286,6 +289,7 @@ class MainWindow(QMainWindow):
             ("Sessions & Connexions","shield",self.show_sessions),
             ("Créer une connexion","plug",self.show_connection_manager),
             ("Logs SQLite","list",self.show_logs),
+            ("Mises à jour","refresh",self.show_updates),
             ("Verrouiller","shield",self.lock_session),
             ("Espaces de travail","layers",self.show_workspaces),
             ("Préférences","settings",self.show_settings),
@@ -405,6 +409,18 @@ class MainWindow(QMainWindow):
                 "success" if ok else "error")
         dialog.ssh_verified.connect(on_verified)
         dialog.exec()
+    def show_updates(self):
+        dialog=UpdateDialog(self.palette,self)
+        dialog.exec()
+
+    def _start_update_check(self):
+        self._update_worker=UpdateWorker("check",parent=self)
+        self._update_worker.checked.connect(
+            lambda release:self.notifications.add(
+                "NOVA "+release["version"]+" disponible dans Mises à jour.","info")
+            if newer(release["version"]) else None)
+        self._update_worker.start()
+
     def show_connection_manager(self):
         if self.session_manager.session.locked:
             self._unlock_or_exit()
@@ -514,6 +530,7 @@ class MainWindow(QMainWindow):
             ("◈  Sessions / Connexions",self.show_sessions),
             ("＋  Créer une connexion",self.show_connection_manager),
             ("▤  Logs SQLite",self.show_logs),
+            ("↻  Mises à jour en ligne",self.show_updates),
             ("⚙  Configuration du Core",self.show_core_preferences),
             ("◈  Verrouiller NOVA",self.lock_session),
             ("▦  Bibliothèque d'applications",self.show_catalog),
@@ -552,6 +569,7 @@ class MainWindow(QMainWindow):
             "Sessions / Connexions":self.show_sessions,
             "Créer une connexion":self.show_connection_manager,
             "Logs SQLite":self.show_logs,
+            "Mises à jour en ligne":self.show_updates,
             "Configuration du Core":self.show_core_preferences,
             "Verrouiller la session":self.lock_session,
             "Tester notification succès":lambda:self.notifications.add("Succès","success"),
