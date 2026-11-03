@@ -1,7 +1,8 @@
 """V2 floating application windows, drag/drop, snap assist and workspace persistence."""
 from __future__ import annotations
+from pathlib import Path
 from PySide6.QtCore import Qt, QRectF, QPoint, QMimeData, Signal
-from PySide6.QtGui import QDrag, QPainter, QPen, QColor
+from PySide6.QtGui import QDrag, QPainter, QPen, QColor, QPixmap
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QSizePolicy,
     QFrame, QListWidget, QListWidgetItem, QMdiArea, QMdiSubWindow,QMenu, QApplication)
 from .v2_skin import NeonSurface, NeonButton, color, draw_bevel_panel, draw_glyph, trace
@@ -171,6 +172,7 @@ class Workspace(QMdiArea):
         self.context=context
         self.theme=theme
         self.counts={}
+        self._art_cache={}
         self.setAcceptDrops(True)
         self.setViewMode(QMdiArea.ViewMode.SubWindowView)
         self.setActivationOrder(QMdiArea.WindowOrder.StackingOrder)
@@ -190,6 +192,18 @@ class Workspace(QMdiArea):
         # Native PCB routing is regenerated at current viewport size: no stretched bitmaps.
         w,h=r.width(),r.height()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Optional user art-pack texture. Native Qt PCB remains functional without it.
+        art_root=Path(__file__).resolve().parents[2] / "Assets" / "Generated"
+        art_path=art_root / self.theme.name / "Backgrounds" / "pcb_tile.png"
+        cache_key=str(art_path)
+        if cache_key not in self._art_cache:
+            self._art_cache[cache_key]=QPixmap(cache_key) if art_path.is_file() else QPixmap()
+        pattern=self._art_cache[cache_key]
+        if not pattern.isNull():
+            painter.save()
+            painter.setOpacity(0.16)
+            painter.drawTiledPixmap(self.viewport().rect(),pattern)
+            painter.restore()
         for i in range(9):
             delta=i*22
             trace(painter,[(6+delta,0),(6+delta,30+delta),
