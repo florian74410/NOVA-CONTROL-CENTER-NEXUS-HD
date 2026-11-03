@@ -129,46 +129,6 @@ def installed_state(base):
 def python_venv(path):
     return path/"bin"/"python"
 
-def install(app,version,wheel,sha256,root=None,offline_dir=None,allow_current=False):
-    app=validate_name(app)
-    version=validate_name(version,VERSION_RE)
-    if app!=APP_ID:
-        raise ValueError("Only NOVA Control Center is enabled in the current catalog")
-    if not SHA_RE.fullmatch(str(sha256)):
-        raise ValueError("SHA-256 required for every wheel")
-    wheel=Path(wheel).resolve(strict=True)
-    if not wheel.is_file() or wheel.suffix!=".whl":
-        raise ValueError("Expected a Python .whl distribution")
-    if hash_file(wheel).lower()!=sha256.lower():
-        raise ValueError("Wheel SHA-256 mismatch; install aborted")
-    base=dirs(root)
-    ensure_directory(base)
-    app_dir=base/"apps"/app
-    versions=app_dir/"versions"
-    ensure_directory(versions)
-    target=versions/version
-    current=app_dir/"current"
-    if target.exists():
-        if not allow_current:raise FileExistsError("Version already installed")
-        return target
-    with tempfile.TemporaryDirectory(prefix=".staging-",dir=versions) as temp:
-        staging=Path(temp)/"environment"
-        venv.EnvBuilder(with_pip=True,clear=True,symlinks=True).create(staging)
-        cmd=[str(python_venv(staging)),"-m","pip","install","--disable-pip-version-check"]
-        if offline_dir:
-            cmd.extend(["--no-index","--find-links",str(Path(offline_dir).resolve())])
-        cmd.append(str(wheel))
-        subprocess.run(cmd,check=True,timeout=900)
-        entry=staging/"bin"/ENTRY
-        if not entry.is_file():
-            raise RuntimeError("Wheel installed, but expected entrypoint missing")
-        # Venv has absolute paths: move the whole staging parent to final
-        # WITHOUT moving the venv itself after pip generated its entry scripts.
-        # This requires stage directory to be at its final path. Instead, create
-        # a stable target location before venv construction, remove on failure.
-        # NOTE: see stable deployment override below.
-        raise RuntimeError("Internal staging path must be stable")
-
 def install_stable(app,version,wheel,sha256,root=None,offline_dir=None):
     """Stable-path venv with atomic pointer switch and rollback on failure."""
     app=validate_name(app)
