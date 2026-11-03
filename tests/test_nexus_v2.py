@@ -33,3 +33,23 @@ def test_vector_glyphs_and_commands(qtbot,tmp_path,monkeypatch):
     win._toggle_sidebar()
     assert win.sidebar.isVisible() or not win.isVisible()
     win.close()
+
+def test_render_v2_screenshot(qtbot,tmp_path,monkeypatch):
+    """Exercise painting, icon rendering, cut-corner frames and header routing."""
+    import os
+    from pathlib import Path
+    import nova_control_center.nexus_v2 as module
+    monkeypatch.setattr(module,"SETTINGS",tmp_path/"v2.json")
+    win=MainWindow()
+    qtbot.addWidget(win)
+    win.resize(1400,850)
+    win.show()
+    qtbot.wait(180)
+    QApplication.processEvents()
+    image=win.grab()
+    assert not image.isNull()
+    assert image.width()>=1200
+    target=Path(os.environ.get("NOVA_SCREENSHOT_DIR",str(tmp_path)))
+    target.mkdir(parents=True,exist_ok=True)
+    assert image.save(str(target/"nova-v2-qt-render.png"))
+    win.close()
