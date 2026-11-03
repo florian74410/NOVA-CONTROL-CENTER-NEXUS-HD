@@ -42,7 +42,6 @@ class HubSocketClient(QObject):
         self.pending[ident] = (method, timer)
         timer.start(timeout_ms)
         if self.socket.state() != QLocalSocket.LocalSocketState.ConnectedState:
-            self.connect_server()
             # Send only after connected; never block Qt's UI thread.
             def send_when_connected():
                 try:
@@ -52,6 +51,7 @@ class HubSocketClient(QObject):
                 if ident in self.pending:
                     self.socket.write((json.dumps(payload, ensure_ascii=False)+"\n").encode())
             self.socket.connected.connect(send_when_connected)
+            self.connect_server()
         else:
             self.socket.write((json.dumps(payload, ensure_ascii=False)+"\n").encode())
         return ident
