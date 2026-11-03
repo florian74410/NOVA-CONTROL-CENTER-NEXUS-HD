@@ -172,8 +172,12 @@ class UpdateDialog(NovaDialog):
         answer=QMessageBox.question(self,"Téléchargement",
             "Télécharger la mise à jour officielle et vérifier son SHA-256 ?")
         if answer!=QMessageBox.StandardButton.Yes:return
-        self.download_dir=tempfile.TemporaryDirectory(prefix="nova-update-")
-        target=Path(self.download_dir.name)/self.release["name"]
+        # Keep the file on disk while pkexec/apt-get processes it.
+        import os
+        base=Path(os.environ.get("XDG_CACHE_HOME",str(Path.home()/".cache")))/"nova-control-center"/"updates"
+        base.mkdir(mode=0o700,parents=True,exist_ok=True)
+        base.chmod(0o700)
+        target=base/self.release["name"]
         self.message.setText("Téléchargement et vérification SHA-256 en cours…")
         self._worker("download",self.release,target)
     def on_downloaded(self,path):
@@ -183,7 +187,7 @@ class UpdateDialog(NovaDialog):
     def install(self):
         if not self.downloaded or not self.downloaded.is_file():return
         if QMessageBox.question(self,"Installer NOVA",
-            "Installer le paquet .deb signé par le canal GitHub HTTPS et vérifié par SHA-256 ? "
+            "Installer le paquet .deb téléchargé via GitHub HTTPS et vérifié par SHA-256 ? "
             "Cette action nécessite les privilèges système.")!=QMessageBox.StandardButton.Yes:
             return
         # pkexec invokes apt-get without a shell and asks for authentication.
