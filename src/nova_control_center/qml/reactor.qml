@@ -48,11 +48,11 @@ Rectangle {
                 }
             }
             Model {
-                source: "#Torus"
-                scale: Qt.vector3d(1.65, 1.65, 1.65)
+                source: "#Sphere"
+                scale: Qt.vector3d(1.35, 1.35, 1.35)
                 eulerRotation.x: 65
                 materials: PrincipledMaterial {
-                    baseColor: "#55EFFF"
+                    baseColor: "#1595C7"
                     roughness: 0.20
                     metalness: 0.65
                     emissiveFactor: Qt.vector3d(0.3, 0.8, 1.0)
