@@ -19,6 +19,16 @@ jobs:
           python -m pytest -q tests/test_v3_distribution.py
       - name: Build NOVA Control Center wheel
         run: python -m build --wheel --outdir dist/
+      - name: CLI install integration smoke
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          WHEEL=$(find dist -maxdepth 1 -name '*.whl' -print -quit)
+          DIGEST=$(sha256sum "$WHEEL" | cut -d' ' -f1)
+          python deploy/nova_installer.py --root "$RUNNER_TEMP/nova-suite-smoke" install --app nova-control-center --version 3.0.0.dev0 --wheel "$WHEEL" --sha256 "$DIGEST"
+          python deploy/nova_installer.py --root "$RUNNER_TEMP/nova-suite-smoke" status
+          python deploy/nova_launcher.py --root "$RUNNER_TEMP/nova-suite-smoke" --status
+          "$RUNNER_TEMP/nova-suite-smoke/apps/nova-control-center/current/bin/python" -c "from PySide6.QtWidgets import QApplication; from nova_control_center.nexus_v21 import MainWindow; app=QApplication([]); w=MainWindow(); assert w.windowTitle(); w.close()"
       - name: Assemble launcher kit
         run: |
           mkdir -p dist/nova-suite-v3-kit
