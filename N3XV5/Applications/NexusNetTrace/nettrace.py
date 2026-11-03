@@ -231,7 +231,7 @@ def probe_stdlib(url: str, method: str = "GET", timeout: float = 15,
         raise ValueError("Only GET, HEAD and OPTIONS supported")
     if not 1 <= timeout <= 120:
         raise ValueError("Timeout must be between 1 and 120")
-    if origin and ("\\r" in origin or "\\n" in origin or len(origin) > 255):
+    if origin and ("\r" in origin or "\n" in origin or len(origin) > 255):
         raise ValueError("Invalid Origin")
     parts = urlsplit(url)
     host = parts.hostname
@@ -276,14 +276,14 @@ def probe_stdlib(url: str, method: str = "GET", timeout: float = 15,
         if parts.port:
             authority += ":" + str(parts.port)
         target = (parts.path or "/") + ("?"+parts.query if parts.query else "")
-        if any(c in target for c in ("\\r","\\n")):
+        if any(c in target for c in ("\r","\n")):
             raise ValueError("Invalid request path")
         headers = [f"{method} {target} HTTP/1.1", f"Host: {authority}",
                    "Connection: close", "User-Agent: N3XV5-NetTrace/0.1",
                    "X-Request-ID: "+request_id]
         if origin:
             headers.append("Origin: "+origin)
-        outgoing = ("\\r\\n".join(headers)+"\\r\\n\\r\\n").encode("utf-8")
+        outgoing = ("\r\n".join(headers)+"\r\n\r\n").encode("utf-8")
         sock.sendall(outgoing)
         response = http.client.HTTPResponse(sock,method=method)
         response.begin()
