@@ -151,6 +151,12 @@ def agent_once(config_path,edge_id,probe_func,dns_func,tcp_func,tls_func):
     """Remote-side authorization uses ONLY that VPS's root-administered config."""
     if Path(config_path).resolve()!=Path(AGENT_CONFIG):
         raise PermissionError("Remote agent config must be the pinned system policy file")
+    policy_file=Path(config_path)
+    if policy_file.is_symlink():
+        raise PermissionError("Remote agent policy cannot be a symlink")
+    st=policy_file.stat()
+    if st.st_uid!=0 or (st.st_mode & 0o022):
+        raise PermissionError("Remote agent policy must be root-owned and not group/world writable")
     policy=load_config(config_path)
     edge=next((item for item in policy["edges"] if item["id"]==edge_id),None)
     if edge is None or not edge.get("remote_enabled",False):
