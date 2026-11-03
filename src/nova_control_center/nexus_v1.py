@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QMenu, QSplitter, QMessageBox, QInputDialog
 )
-from .nexus_theme import PALETTES, stylesheet
+from .nexus_theme import PALETTES, stylesheet, NovaLogo
 from .nexus_apps import BUILTIN_APPS, AppContext
 from .nexus_desktop import AppRail, NovaDesktop
 
@@ -53,8 +53,8 @@ class MainWindow(QMainWindow):
         self.topbar.setFixedHeight(55)
         h = QHBoxLayout(self.topbar)
         h.setContentsMargins(15, 4, 10, 4)
-        logo = QLabel("⬡")
-        logo.setFont(QFont("DejaVu Sans", 25, QFont.Weight.Bold))
+        logo = NovaLogo(PALETTES[self.theme_name])
+        self.logo = logo
         h.addWidget(logo)
         self.brand = QLabel("NOVA CONTROL CENTER")
         self.brand.setObjectName("brand")
@@ -206,6 +206,7 @@ class MainWindow(QMainWindow):
         pal = PALETTES[self.theme_name]
         QApplication.instance().setStyleSheet(stylesheet(pal))
         self.desktop.set_palette(pal)
+        self.logo.set_palette(pal)
         self.footer.setStyleSheet(f"border-top: 1px solid {pal.edge};")
         self.theme_button.setMenu(self._make_theme_menu())
         self._refresh_status()
