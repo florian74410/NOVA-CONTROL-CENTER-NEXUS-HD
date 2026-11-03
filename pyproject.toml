@@ -4,16 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nova-control-center"
-version = "1.0.0.dev0"
-description = "NEXUS HD full-Qt Linux multi-application control center"
+version = "2.0.0.dev0"
+description = "NEXUS HD V2 CyberPCB Full Qt Linux multi-application control center"
 requires-python = ">=3.10"
-dependencies = ["PySide6>=6.6,<7"]
+dependencies = ["PySide6>=6.8.3,<6.9"]
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-qt>=4.4"]
 
 [project.scripts]
-nova-control-center = "nova_control_center.nexus_v1:main"
+nova-control-center = "nova_control_center.nexus_v2:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"nova_control_center" = ["qml/*.qml"]
