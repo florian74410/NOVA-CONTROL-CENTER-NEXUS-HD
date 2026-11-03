@@ -14,6 +14,7 @@ from .nexus_v2_paint import vector_icon, draw_frame
 from .nexus_v2_desktop import AppShelf, NexusDesktop
 from .nexus_v21_effects import NotificationLayer, PulseIndicator
 from .app_registry import ApplicationRegistry, discover_manifests
+from .control_panels import ControlSettingsDialog, ControlSessionsDialog
 
 SETTINGS = Path.home()/".config"/"nova-control-center"/"v21.json"
 INSTALLED = Path.home()/".local"/"share"/"nova-control-center"/"Applications"/"Installed"
@@ -121,7 +122,9 @@ class MainWindow(QMainWindow):
         self._build()
         self.set_theme(self.theme_name)
         self.desktop.effect_enabled=bool(self.state.get("animations",True))
-        self.desktop.restore_snapshot(self.state.get("workspace",[]))
+        from PySide6.QtCore import QSettings
+        if str(QSettings("NOVA","ControlCenter").value("restore_workspace","true")).lower()=="true":
+            self.desktop.restore_snapshot(self.state.get("workspace",[]))
         self._update_status()
     def _build(self):
         root=QWidget(self)
@@ -157,6 +160,7 @@ class MainWindow(QMainWindow):
             ("Applications","apps",self.show_catalog),
             ("Espaces","layers",self.show_workspaces),
             ("Paramètres","settings",self.show_settings),
+            ("Sessions","shield",self.show_sessions),
         ):
             btn=QPushButton(label)
             btn.setObjectName("iconNav")
@@ -225,6 +229,7 @@ class MainWindow(QMainWindow):
         for text,ico,slot in (
             ("Bibliothèque","apps",self.show_catalog),
             ("Notifications","bell",self.show_notifications),
+            ("Sessions & Connexions","shield",self.show_sessions),
             ("Espaces de travail","layers",self.show_workspaces),
             ("Préférences","settings",self.show_settings),
         ):
@@ -307,7 +312,26 @@ class MainWindow(QMainWindow):
     def show_workspaces(self):
         self.notifications.add("Espace actuel sauvegardable depuis le menu NEXUS.","info")
     def show_settings(self):
-        self.notifications.add("Thèmes et animations disponibles depuis le menu principal.","info")
+        dialog=ControlSettingsDialog(self.palette,self)
+        dialog.applied.connect(self.apply_settings)
+        dialog.exec()
+
+    def apply_settings(self,data):
+        self.set_theme(data.get("theme",self.theme_name))
+        self.desktop.effect_enabled=bool(data.get("animations",True))
+        if self.desktop.effect_enabled:self.indicator.timer.start()
+        else:self.indicator.timer.stop()
+        width=int(data.get("sidebar_width",223))
+        self.splitter.setSizes([width,max(200,self.splitter.width()-width)])
+        self.notifications.add("Paramètres NOVA enregistrés.","success")
+
+    def show_sessions(self):
+        dialog=ControlSessionsDialog(self.palette,self)
+        dialog.ssh_verified.connect(
+            lambda name,ok:self.notifications.add(
+                f"SSH {name} : "+("connexion vérifiée" if ok else "échec de connexion"),
+                "success" if ok else "error"))
+        dialog.exec()
     def show_notifications(self):
         self.notifications.add("Bienvenue dans le système de notifications NEXUS.","success")
     def set_theme(self,key):
@@ -351,6 +375,8 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
         actions=[
             ("⌂  Bureau",self.show_workspace),
+            ("⚙  Paramètres",self.show_settings),
+            ("◈  Sessions / Connexions",self.show_sessions),
             ("▦  Bibliothèque d'applications",self.show_catalog),
             ("▣  Disposition mosaïque",self.tile_windows),
             ("▤  Disposition cascade",self.cascade_windows),
@@ -383,6 +409,8 @@ class MainWindow(QMainWindow):
     def command_palette(self):
         actions={
             "Ouvrir bibliothèque":self.show_catalog,
+            "Paramètres NOVA":self.show_settings,
+            "Sessions / Connexions":self.show_sessions,
             "Tester notification succès":lambda:self.notifications.add("Succès","success"),
             "Tester notification erreur":lambda:self.notifications.add("Erreur","error"),
             "Tester notification avertissement":lambda:self.notifications.add("Attention","warning"),
