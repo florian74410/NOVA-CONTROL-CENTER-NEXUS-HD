@@ -8,7 +8,7 @@ import math
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QFont, QPen
 from .grid_engine import Tile, GridView
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QFileDialog
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QFileDialog, QMessageBox
 
 COMMANDS=("probe","dns","tcp","tls","har","correlate","mesh")
 MAX_TEXT=180
@@ -219,7 +219,13 @@ class NetTracePanel(QWidget):
             filename,_=QFileDialog.getOpenFileName(
                 self,"Topologie multi-VPS N3XV5","","N3XV5 Mesh (*.json)")
             if not filename:return
-            target=filename
+            allow_remote=(QMessageBox.question(
+                self,"Diagnostic distant SSH",
+                "Autoriser NetTrace à contacter les agents des VPS déclarés en SSH ? "
+                "Seules les liaisons explicitement autorisées côté VPS seront testées."
+            )==QMessageBox.StandardButton.Yes)
+            target=__import__("json").dumps(
+                {"topology":filename,"allow_remote":allow_remote})
         elif command=="har":
             filename,_=QFileDialog.getOpenFileName(self,"Importer HAR Firefox","",
                                                      "HTTP Archive (*.har *.json)")
