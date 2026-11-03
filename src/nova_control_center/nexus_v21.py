@@ -27,6 +27,8 @@ from .native_apps_ui import NativeAppsDialog
 from .grid_engine import GridView, DisplayItem
 from .iatb_socket_client import HubSocketClient
 from .cli_cache import CliCacheManager
+from .layout_storage import save_layout, load_layout
+from .action_registry import ActionRegistry
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -332,6 +334,10 @@ class MainWindow(QMainWindow):
         self.cli_cache.updated.connect(self._on_cli_cache_updated)
         self.cli_cache.failed.connect(self._on_cli_cache_error)
         self.iatb_tiles={}
+        self.action_registry=ActionRegistry(self)
+        self._layout_restoring=False
+        self._restore_grid_layout()
+        self.grid_view.grid.changed.connect(self._save_grid_layout)
         self.iatb_poll=QTimer(self)
         self.iatb_poll.setInterval(60000)
         self.iatb_poll.timeout.connect(self._poll_iatb)
@@ -394,6 +400,43 @@ class MainWindow(QMainWindow):
     def toggle_maximized(self):
         if self.isMaximized():self.showNormal()
         else:self.showMaximized()
+    def _save_grid_layout(self):
+        if self._layout_restoring:
+            return
+        frames=[]
+        for tile in self.grid_view.grid.tiles.values():
+            info=self.iatb_tiles.get(tile.key,{})
+            category=info.get("category","")
+            frames.append({"title":tile.title,"x":tile.xcell,"y":tile.ycell,
+                           "w":tile.wcell,"h":tile.hcell,
+                           "app_id":"iatb-cli" if category else "",
+                           "category":category})
+        try:
+            save_layout(frames)
+        except OSError:
+            pass
+
+    def _restore_grid_layout(self):
+        self._layout_restoring=True
+        try:
+            try:
+                frames=load_layout()
+            except (OSError,ValueError,KeyError,TypeError):
+                frames=[]
+            mapping={"Vitalité":["vps.status","vps.resources","gen1.status"],
+                     "Actions":["gen1.status"],
+                     "Services":["vps.ps","gen1.apps.health"],
+                     "Journaux":["vps.logs.fundamental"],
+                     "Réseau":["gen1.caddy.check"]}
+            for frame in frames:
+                tile=self.grid_view.grid.add_at(frame["title"],frame["x"],frame["y"],
+                                                frame["w"],frame["h"])
+                if tile and frame.get("app_id")=="iatb-cli":
+                    category=frame.get("category","")
+                    self.iatb_tiles[tile.key]={"category":category,"methods":mapping.get(category,[]),"results":{}}
+        finally:
+            self._layout_restoring=False
+
     def open_vps_category(self,category):
         methods={
             "Vitalité":["vps.status","vps.resources","gen1.status"],
@@ -408,7 +451,7 @@ class MainWindow(QMainWindow):
         if tile is None:
             self.notifications.add("Grille pleine : aucune zone 3 x 3 disponible.","warning")
             return
-        self.iatb_tiles[tile.key]={"methods":methods,"results":{}}
+        self.iatb_tiles[tile.key]={"category":category,"methods":methods,"results":{}}
         self._poll_iatb()
 
     def _poll_iatb(self):
