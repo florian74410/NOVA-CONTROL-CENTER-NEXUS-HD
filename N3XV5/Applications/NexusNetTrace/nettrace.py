@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import socket
@@ -177,10 +178,19 @@ def probe(url: str, method: str = "GET", timeout: float = 15, curl_binary: str =
         if origin:
             args[-2:-2] = ["--header", "Origin: " + origin]
         started = time.monotonic()
+        # PyInstaller modifies LD_LIBRARY_PATH for bundled Python libraries.
+        # Restore the original loader path before invoking external curl.
+        # Otherwise curl may fail to link libssl/libcurl in onefile builds.
+        curl_env = os.environ.copy()
+        if getattr(sys, "frozen", False):
+            if "LD_LIBRARY_PATH_ORIG" in curl_env:
+                curl_env["LD_LIBRARY_PATH"] = curl_env["LD_LIBRARY_PATH_ORIG"]
+            else:
+                curl_env.pop("LD_LIBRARY_PATH", None)
         try:
             result = subprocess.run(args, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, timeout=timeout + 4,
-                                    check=False)
+                                    check=False, env=curl_env)
         except subprocess.TimeoutExpired:
             return {"target": safe_url(url), "request_id": request_id,
                     "method": method, "error": "timeout",
