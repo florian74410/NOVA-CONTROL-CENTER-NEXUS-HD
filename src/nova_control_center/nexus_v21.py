@@ -428,7 +428,7 @@ class MainWindow(QMainWindow):
             return
         import json as _json
         from urllib.parse import urlsplit
-        if command not in ("probe","dns","tcp","tls","har","correlate"):
+        if command not in ("probe","dns","tcp","tls","har","correlate","mesh"):
             self.nettrace_panel.status.setText("Commande NetTrace inconnue")
             return
         try:
@@ -438,7 +438,14 @@ class MainWindow(QMainWindow):
                     "Installe NetTrace .deb dans Applications natives et autorise nettrace.publish")
                 return
             args=["--hub-publish",command]
-            if command=="correlate":
+            if command=="mesh":
+                data=_json.loads(target)
+                if not isinstance(data,dict) or not isinstance(data.get("topology"),str):
+                    raise ValueError("Topologie invalide")
+                args.append(data["topology"])
+                if data.get("allow_remote") is True:
+                    args.append("--allow-remote")
+            elif command=="correlate":
                 paths=_json.loads(target)
                 if not isinstance(paths,list) or len(paths)!=2:
                     raise ValueError("Deux chemins de fichiers JSON requis")
