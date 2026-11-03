@@ -11,7 +11,8 @@ from PySide6.QtGui import QAction,QKeySequence,QFont
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,
     QLabel,QSplitter,QMenu,QMessageBox,QInputDialog,QDialog,QLineEdit,QListWidget,
     QListWidgetItem,QFrame)
-from .nexus_apps import BUILTIN_APPS, AppContext
+from .nexus_apps import AppContext
+from .v2_showcases import HeroPanel, RoutingPanel, ReactorPanel, WidgetPanel
 from .v2_skin import THEMES, NeonSurface, NeonButton, NovaMark, form_stylesheet, icon
 from .v2_workspace import Workspace, AppCatalog
 
@@ -24,9 +25,12 @@ class AppSpec:
     glyph: str
     factory: object
 
-ICON_IDS=("terminal","folder","settings","activity")
-APPS=tuple(AppSpec(d.app_id,d.title,ICON_IDS[n],d.factory)
-           for n,d in enumerate(BUILTIN_APPS))
+APPS=(
+    AppSpec("showcase.hero","NEXUS DESIGN LAB","apps",HeroPanel),
+    AppSpec("showcase.reactor","QT QUICK 3D / REACTOR","chip",ReactorPanel),
+    AppSpec("showcase.routes","PCB ROUTING / CONNECTIONS","network",RoutingPanel),
+    AppSpec("showcase.widgets","WIDGET KIT / THEME","settings",WidgetPanel),
+)
 
 class EventBus(QObject):
     event=Signal(str,object)
@@ -83,7 +87,7 @@ class MainWindow(QMainWindow):
         self._build()
         self.apply_theme(self.theme_name)
         if not self.desktop.restore_snapshot(self.state.get("workspace",[])):
-            for app in ("demo.terminal","demo.explorer","demo.controls","demo.events"):
+            for app in ("showcase.hero","showcase.reactor","showcase.routes","showcase.widgets"):
                 self.desktop.open_app(app)
             self.desktop.tileSubWindows()
         self._status()
@@ -121,6 +125,16 @@ class MainWindow(QMainWindow):
         brand_area.addWidget(sub)
         header.addLayout(brand_area)
         header.addStretch()
+        for label,glyph,app_id in (
+            ("DESKTOP","dashboard","showcase.hero"),
+            ("REACTOR","chip","showcase.reactor"),
+            ("ROUTING","network","showcase.routes"),
+            ("WIDGETS","settings","showcase.widgets"),
+        ):
+            nav=self._button(label,glyph,lambda key=app_id:self.open_app(key),compact=True)
+            nav.setToolTip("Ouvrir le panneau de démonstration "+label)
+            nav.setMinimumWidth(95)
+            header.addWidget(nav)
         for label,glyph,callback in (
             ("", "apps",self._toggle_sidebar),
             ("", "align",lambda:self.desktop.tileSubWindows()),
@@ -247,13 +261,13 @@ class MainWindow(QMainWindow):
     def _app_info(self):
         QMessageBox.information(self,"NOVA APP MANAGER",
           "Cette V2 est une fondation graphique Full Qt.\n\n"
-          "Les applications sont des widgets de démonstration chargés en instances multiples.\n"
+          "Les panneaux de la V2 sont des démonstrateurs graphiques, sans accès distant.\n"
           "L'installation de modules externes approuvés sera ajoutée après validation de l'interface.")
     def _about(self):
         QMessageBox.information(self,"NEXUS HD V2",
           "NOVA CONTROL CENTER V2 — CyberPCB / Full Qt 6\n"
           "Bureau multi-fenêtres, verre, pistes électroniques, icônes vectorielles.\n"
-          "Mode démonstration hors connexion.")
+          "Mode démonstration hors connexion. Qt Quick 3D optionnel : NOVA_ENABLE_3D=1.")
     def _load_state(self):
         try:
             obj=json.loads(SETTINGS.read_text(encoding="utf-8"))
