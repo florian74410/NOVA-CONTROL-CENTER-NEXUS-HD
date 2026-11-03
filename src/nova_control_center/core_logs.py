@@ -5,6 +5,7 @@ or secrets. Audit entries cannot be disabled through UI preferences.
 """
 from __future__ import annotations
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -34,6 +35,8 @@ class LogStore:
     def __init__(self,path=None):
         self.path=Path(path) if path else xdg_data()/"logs.sqlite3"
         self.path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+        try:os.chmod(self.path.parent,0o700)
+        except OSError:pass
         self._lock=threading.RLock()
         self._db=sqlite3.connect(str(self.path),check_same_thread=False,timeout=4)
         self._db.execute("PRAGMA busy_timeout=4000")
