@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "nodes": [
+    {
+      "id": "client",
+      "vps": "PC local",
+      "agent": "local"
+    },
+    {
+      "id": "collector",
+      "vps": "VPS-A",
+      "agent": "ssh",
+      "ssh_host": "vps-a.example.org",
+      "ssh_user": "nettrace"
+    },
+    {
+      "id": "fundamental",
+      "vps": "VPS-B",
+      "agent": "ssh",
+      "ssh_host": "vps-b.example.org",
+      "ssh_user": "nettrace"
+    },
+    {
+      "id": "trading",
+      "vps": "VPS-C",
+      "agent": "ssh",
+      "ssh_host": "vps-c.example.org",
+      "ssh_user": "nettrace"
+    }
+  ],
+  "edges": [
+    {
+      "id": "client-to-collector",
+      "source": "client",
+      "target": "collector",
+      "check": {
+        "command": "probe",
+        "url": "https://vps-a.example.org/health"
+      }
+    },
+    {
+      "id": "collector-to-fundamental",
+      "source": "collector",
+      "target": "fundamental",
+      "check": {
+        "command": "tcp",
+        "host": "vps-b.example.org",
+        "port": 443
+      },
+      "remote_enabled": true
+    },
+    {
+      "id": "fundamental-to-trading",
+      "source": "fundamental",
+      "target": "trading",
+      "check": {
+        "command": "tls",
+        "host": "vps-c.example.org",
+        "port": 443
+      },
+      "remote_enabled": true
+    },
+    {
+      "id": "trading-to-collector",
+      "source": "trading",
+      "target": "collector",
+      "check": {
+        "command": "probe",
+        "url": "https://vps-a.example.org/health"
+      },
+      "remote_enabled": true
+    }
+  ]
+}
