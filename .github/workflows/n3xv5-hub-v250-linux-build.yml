@@ -1,7 +1,7 @@
-name: N3XV5 HUB 2.5 Linux Qt / IPC / Native Apps
+name: N3XV5 HUB 2.6 NetTrace 2D IPC
 on:
   push:
-    branches: [work/n3xv5-phase2-4-hub-auth-apps, work/n3xv5-grid-cli-protocol-v260]
+    branches: [work/n3xv5-phase2-4-hub-auth-apps, work/n3xv5-grid-cli-protocol-v260, work/n3xv5-nettrace-hub-2d-ipc]
   workflow_dispatch:
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip build pytest pytest-qt
           python -m pip install -e '.[test]'
           python -m compileall -q src
-          PYTHONPATH=N3XV5/Core python -m pytest -q tests/test_connection_preload.py tests/test_core_services.py tests/test_control_panels.py tests/test_nexus_crashfix.py tests/test_suite_portability.py tests/test_n3xv5_hub_phase234.py tests/test_n3xv5_cli_grid.py N3XV5/tests/test_foundation.py
+          PYTHONPATH=N3XV5/Core python -m pytest -q tests/test_connection_preload.py tests/test_core_services.py tests/test_control_panels.py tests/test_nexus_crashfix.py tests/test_suite_portability.py tests/test_n3xv5_hub_phase234.py tests/test_n3xv5_nettrace_hub_2d.py tests/test_n3xv5_cli_grid.py N3XV5/tests/test_foundation.py
           python -m build --wheel --outdir dist
       - name: Compile standalone Linux binary
         run: |
@@ -44,7 +44,7 @@ jobs:
       - name: Package DEB
         run: |
           set -euo pipefail
-          VERSION=2.5.0~dev0
+          VERSION=2.6.0~dev0
           PKG="$RUNNER_TEMP/nova-control-center-deb"
           mkdir -p "$PKG/DEBIAN" "$PKG/opt/nova-control-center" "$PKG/usr/bin" "$PKG/usr/share/applications"
           cp -a dist/nova-control-center/. "$PKG/opt/nova-control-center/"
@@ -74,14 +74,14 @@ jobs:
           Categories=Development;System;
           StartupNotify=true
           EOF
-          dpkg-deb --build --root-owner-group "$PKG" "dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb"
-          dpkg-deb --info dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb
-          sha256sum dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb dist/*.whl > dist/SHA256SUMS.txt
+          dpkg-deb --build --root-owner-group "$PKG" "dist/NOVA-Control-Center_2.6.0-dev0_amd64.deb"
+          dpkg-deb --info dist/NOVA-Control-Center_2.6.0-dev0_amd64.deb
+          sha256sum dist/NOVA-Control-Center_2.6.0-dev0_amd64.deb dist/*.whl > dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: NOVA-Control-Center-2.5.0-dev0-Linux-amd64
+          name: NOVA-Control-Center-2.6.0-dev0-Linux-amd64
           path: |
-            dist/NOVA-Control-Center_2.5.0-dev0_amd64.deb
+            dist/NOVA-Control-Center_2.6.0-dev0_amd64.deb
             dist/*.whl
             dist/SHA256SUMS.txt
           retention-days: 30
