@@ -62,7 +62,7 @@ def test_ui_shows_faulted_edge_first():
     full=compact_report({"command":"mesh","data":result},(4,4))
     assert "2 FAIL" in short["headline"]
     assert len(short["rows"])<len(mid["rows"])<len(full["rows"])
-    assert any("engine-to-engin" in str(x) for x in full["rows"])
+    assert any("FAIL" in str(x) and "engine-to" in str(x) for x in full["rows"])
 
 def test_agent_policy_requires_pinned_root_owned_path(tmp_path):
     policy=tmp_path/"policy.json";policy.write_text(json.dumps(topology()))
