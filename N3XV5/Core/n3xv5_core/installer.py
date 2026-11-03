@@ -86,3 +86,11 @@ class NativePackageManager:
         if sha256(path)!=manifest["package_sha256"]:
             raise ValueError("Staged package integrity failure")
         return path
+
+    def mark_installed(self,app_id):
+        """Called only after the native OS installer exits with code zero."""
+        entries=self.list()
+        path=self.verified_staged_package(app_id)
+        entries[app_id]["state"]="installed"
+        self._write_catalog(entries)
+        return path
