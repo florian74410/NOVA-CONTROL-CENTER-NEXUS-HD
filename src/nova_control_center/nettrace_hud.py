@@ -5,9 +5,10 @@ placement, resizing and removal is exclusively controlled by HUB GridScene.
 """
 from __future__ import annotations
 import math
-from PySide6.QtCore import Qt, QRectF
+from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QFont, QPen
-from .grid_engine import Tile
+from .grid_engine import Tile, GridView
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QFileDialog
 
 COMMANDS=("probe","dns","tcp","tls","har","correlate")
 MAX_TEXT=180
@@ -140,3 +141,91 @@ class NetTraceTile(Tile):
                                  "+"+str(hidden)+" détails · agrandir ↘")
         finally:
             painter.restore()
+
+class NetTracePanel(QWidget):
+    """2D page: only the HUB constructs widgets, CLI sends JSON diagnostics."""
+    requested=Signal(str,str)
+    def __init__(self,parent=None):
+        super().__init__(parent)
+        layout=QVBoxLayout(self)
+        layout.setContentsMargins(4,4,4,4)
+        layout.setSpacing(5)
+        bar=QHBoxLayout()
+        bar.setSpacing(7)
+        bar.addWidget(QLabel("NETTRACE //"))
+        self.command=QComboBox(self)
+        self.command.addItems(["probe","dns","tcp","tls","har","correlate"])
+        self.command.setToolTip("Type de diagnostic à exécuter dans NetTrace CLI")
+        bar.addWidget(self.command)
+        self.target=QLineEdit(self)
+        self.target.setPlaceholderText("https://vps.example.org/api/health")
+        self.target.returnPressed.connect(self.run)
+        bar.addWidget(self.target,1)
+        start=QPushButton("▶ DIAGNOSTIC")
+        start.clicked.connect(self.run)
+        bar.addWidget(start)
+        new=QPushButton("+ iFrame")
+        new.clicked.connect(self.new_tile)
+        bar.addWidget(new)
+        layout.addLayout(bar)
+        self.grid_view=GridView(self)
+        layout.addWidget(self.grid_view,1)
+        self.status=QLabel("CLI déconnecté · sélectionne un test pour afficher ses résultats")
+        layout.addWidget(self.status)
+        self.tile=None
+        self.new_tile()
+        self.command.currentTextChanged.connect(self._placeholder)
+
+    def _placeholder(self,command):
+        hints={"probe":"https://vps.example.org/api/health",
+               "dns":"vps.example.org","tcp":"vps.example.org:443",
+               "tls":"vps.example.org:443",
+               "har":"Fichier HAR Firefox (sélection automatique)",
+               "correlate":"Rapport client + logs VPS (sélection automatique)"}
+        self.target.setPlaceholderText(hints.get(command,""))
+        self.target.setEnabled(command not in ("har","correlate"))
+
+    def new_tile(self):
+        scene=self.grid_view.grid
+        if self.tile is not None and self.tile.scene() is scene:
+            self.tile.setSelected(True)
+            return self.tile
+        tile=scene.add_tile("NETTRACE",2,3,tile_class=NetTraceTile)
+        self.tile=tile
+        if tile is None:self.status.setText("Grille 9×9 pleine · libère 2×3 cellules")
+        return tile
+
+    def run(self):
+        command=self.command.currentText()
+        if command=="har":
+            filename,_=QFileDialog.getOpenFileName(self,"Importer HAR Firefox","",
+                                                     "HTTP Archive (*.har *.json)")
+            if not filename:return
+            target=filename
+        elif command=="correlate":
+            client,_=QFileDialog.getOpenFileName(self,"Rapport NetTrace client","",
+                                                  "NetTrace JSON (*.json)")
+            if not client:return
+            server,_=QFileDialog.getOpenFileName(self,"Logs JSONL VPS","",
+                                                  "Logs JSONL (*.jsonl *.log *.txt)")
+            if not server:return
+            target=__import__("json").dumps([client,server])
+        else:
+            target=self.target.text().strip()
+        if not target:
+            self.status.setText("Saisis une URL, un domaine ou une adresse hôte:port")
+            return
+        self.new_tile()
+        self.status.setText("Diagnostic "+command+" en cours via IPC Unix…")
+        self.requested.emit(command,target)
+
+    def apply_report(self,payload):
+        if not isinstance(payload,dict) or payload.get("command") not in COMMANDS:
+            return False
+        tile=self.new_tile()
+        if tile is None:return False
+        tile.set_report(payload)
+        model=compact_report(payload,(tile.wcell,tile.hcell))
+        self.status.setText("NETTRACE / "+model["headline"]+
+                            " · double action: glisser, redimensionner ↘, supprimer ✕")
+        return True
