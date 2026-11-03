@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QFont, QPen
 from .grid_engine import Tile, GridView
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QFileDialog
 
-COMMANDS=("probe","dns","tcp","tls","har","correlate")
+COMMANDS=("probe","dns","tcp","tls","har","correlate","mesh")
 MAX_TEXT=180
 
 def brief(value,limit=30):
@@ -70,6 +70,23 @@ def compact_report(report,cells):
         for item in (data.get("slowest") or [])[:8]:
             if isinstance(item,dict):
                 base.append((str(item.get("status","?")),str(item.get("duration_ms","?"))+"ms "+brief(item.get("target"),64)))
+    elif command=="MESH":
+        nodes=data.get("nodes") or []
+        edges=data.get("edges") or []
+        failures=data.get("failures",0)
+        headline="MESH "+str(failures)+" FAIL / "+str(data.get("total",len(edges)))
+        base=[("NODES",len(nodes)),("LINKS",data.get("total",len(edges))),
+              ("FAILURES",failures)]
+        # A failed edge always comes first for diagnostic priority.
+        ranked=sorted((e for e in edges if isinstance(e,dict)),
+                      key=lambda e:(bool(e.get("ok")),str(e.get("id",""))))
+        for edge in ranked[:18]:
+            label=("FAIL " if not edge.get("ok") else "OK ")+str(edge.get("id",""))
+            value=str(edge.get("source",""))+" → "+str(edge.get("target",""))
+            if isinstance(edge.get("data"),dict):
+                info=edge["data"]
+                value+=" / "+str(info.get("status",info.get("error",info.get("duration_ms",""))))
+            base.append((label,value))
     elif command=="CORRELATE":
         matches=data.get("server_matches") or []
         headline="VPS "+str(len(matches))+" MATCH"
@@ -86,7 +103,7 @@ def compact_report(report,cells):
     base=[(brief(label,20),brief(value,MAX_TEXT)) for label,value in base if value is not None]
     severe=bool(error) or (isinstance(status,int) and status>=400) or (
         command=="TLS" and not data.get("valid")) or (
-        command=="TCP" and not data.get("open"))
+        command=="TCP" and not data.get("open")) or (command=="MESH" and bool(data.get("failures")))
     limit={"small":1,"medium":5,"large":24}[tier]
     return {"tier":tier,"headline":headline,"command":command,
             "rows":base[:limit],"severity":"error" if severe else "ok",
@@ -154,7 +171,7 @@ class NetTracePanel(QWidget):
         bar.setSpacing(7)
         bar.addWidget(QLabel("NETTRACE //"))
         self.command=QComboBox(self)
-        self.command.addItems(["probe","dns","tcp","tls","har","correlate"])
+        self.command.addItems(["probe","dns","tcp","tls","har","correlate","mesh"])
         self.command.setToolTip("Type de diagnostic à exécuter dans NetTrace CLI")
         bar.addWidget(self.command)
         self.target=QLineEdit(self)
@@ -181,9 +198,10 @@ class NetTracePanel(QWidget):
                "dns":"vps.example.org","tcp":"vps.example.org:443",
                "tls":"vps.example.org:443",
                "har":"Fichier HAR Firefox (sélection automatique)",
-               "correlate":"Rapport client + logs VPS (sélection automatique)"}
+               "correlate":"Rapport client + logs VPS (sélection automatique)",
+               "mesh":"Topologie Engines/VPS JSON (sélection automatique)"}
         self.target.setPlaceholderText(hints.get(command,""))
-        self.target.setEnabled(command not in ("har","correlate"))
+        self.target.setEnabled(command not in ("har","correlate","mesh"))
 
     def new_tile(self):
         scene=self.grid_view.grid
@@ -197,7 +215,12 @@ class NetTracePanel(QWidget):
 
     def run(self):
         command=self.command.currentText()
-        if command=="har":
+        if command=="mesh":
+            filename,_=QFileDialog.getOpenFileName(
+                self,"Topologie multi-VPS N3XV5","","N3XV5 Mesh (*.json)")
+            if not filename:return
+            target=filename
+        elif command=="har":
             filename,_=QFileDialog.getOpenFileName(self,"Importer HAR Firefox","",
                                                      "HTTP Archive (*.har *.json)")
             if not filename:return
