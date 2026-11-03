@@ -19,6 +19,9 @@ from .core_settings import PreferencesStore
 from .core_logs import LogStore
 from .core_sessions import SessionManager
 from .core_dialogs import LogsDialog, CorePreferencesDialog, UnlockDialog
+from .connection_registry import UserConnectionRegistry
+from .connection_session_cache import ConnectionSessionCache
+from .connection_manager_ui import ConnectionManagerDialog
 
 SETTINGS = Path.home()/".config"/"nova-control-center"/"v21.json"
 INSTALLED = Path.home()/".local"/"share"/"nova-control-center"/"Applications"/"Installed"
@@ -122,6 +125,9 @@ class MainWindow(QMainWindow):
         self.log_store=LogStore()
         self.log_store.prune(self.preferences.log_retention_days,self.preferences.log_max_records)
         self.session_manager=SessionManager()
+        self.connection_cache=ConnectionSessionCache(
+            UserConnectionRegistry(),
+            event_callback=lambda name,data:self.bus.publish(name,data))
         self.registry=ApplicationRegistry()  # zero fake modules
         self.state=self.load_state()
         self.theme_name=self.state.get("theme","ElectroBlueNEON")
@@ -134,6 +140,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtCore import QSettings
         if str(QSettings("NOVA","ControlCenter").value("restore_workspace","true")).lower()=="true":
             self.desktop.restore_snapshot(self.state.get("workspace",[]))
+        self.connection_cache.preload()
         self._update_status()
         self.log_store.write("AUDIT","core","session.started","Session NOVA initialisée",
                              self.session_manager.session.session_id)
@@ -144,6 +151,7 @@ class MainWindow(QMainWindow):
         QApplication.instance().installEventFilter(self)
         if self.session_manager.has_pin():
             self.session_manager.lock()
+            self.connection_cache.invalidate()
             QTimer.singleShot(0,self._unlock_or_exit)
     def _build(self):
         root=QWidget(self)
@@ -180,6 +188,7 @@ class MainWindow(QMainWindow):
             ("Espaces","layers",self.show_workspaces),
             ("Paramètres","settings",self.show_settings),
             ("Sessions","shield",self.show_sessions),
+            ("Créer une connexion","plug",self.show_connection_manager),
             ("Journaux","list",self.show_logs),
         ):
             btn=QPushButton(label)
@@ -250,6 +259,7 @@ class MainWindow(QMainWindow):
             ("Bibliothèque","apps",self.show_catalog),
             ("Notifications","bell",self.show_notifications),
             ("Sessions & Connexions","shield",self.show_sessions),
+            ("Créer une connexion","plug",self.show_connection_manager),
             ("Logs SQLite","list",self.show_logs),
             ("Verrouiller","shield",self.lock_session),
             ("Espaces de travail","layers",self.show_workspaces),
@@ -370,6 +380,23 @@ class MainWindow(QMainWindow):
                 "success" if ok else "error")
         dialog.ssh_verified.connect(on_verified)
         dialog.exec()
+    def show_connection_manager(self):
+        if self.session_manager.session.locked:
+            self._unlock_or_exit()
+            if self.session_manager.session.locked:return
+        dialog=ConnectionManagerDialog(self.palette,self.connection_cache,self)
+        dialog.saved.connect(lambda connection_id:self.log_store.write(
+            "AUDIT","connections","profile.saved","Profil enregistré",
+            self.session_manager.session.session_id))
+        dialog.activated.connect(self._activate_connection)
+        dialog.exec()
+
+    def _activate_connection(self,connection_id):
+        self.session_manager.select_connection(connection_id)
+        self.log_store.write("AUDIT","connections","profile.selected",
+            "Profil sélectionné",self.session_manager.session.session_id)
+        self.notifications.add("Connexion disponible pour les applications NOVA.","success")
+
     def show_logs(self):
         dialog=LogsDialog(self.palette,self.log_store,self.preferences,self)
         dialog.exec()
@@ -391,6 +418,7 @@ class MainWindow(QMainWindow):
             self.notifications.add("Configure un PIN dans Configuration Core avant de verrouiller.","warning")
             return
         if self.session_manager.lock():
+            self.connection_cache.invalidate()
             self.log_store.write("AUDIT","security","session.locked","Verrouillage manuel",
                                  self.session_manager.session.session_id)
             self._unlock_or_exit()
@@ -399,6 +427,7 @@ class MainWindow(QMainWindow):
         if not self.session_manager.session.locked:return
         dialog=UnlockDialog(self.palette,self.session_manager,self)
         if dialog.exec()==dialog.DialogCode.Accepted:
+            self.connection_cache.unlock_and_reload()
             self.log_store.write("AUDIT","security","session.unlocked","Session déverrouillée",
                                  self.session_manager.session.session_id)
         else:
@@ -410,6 +439,7 @@ class MainWindow(QMainWindow):
             self.log_store.write("AUDIT","security","session.auto_locked",
                 "Verrouillage après inactivité",self.session_manager.session.session_id)
             self.session_manager.lock()
+            self.connection_cache.invalidate()
             self._unlock_or_exit()
 
     def show_notifications(self):
@@ -457,6 +487,7 @@ class MainWindow(QMainWindow):
             ("⌂  Bureau",self.show_workspace),
             ("⚙  Paramètres",self.show_settings),
             ("◈  Sessions / Connexions",self.show_sessions),
+            ("＋  Créer une connexion",self.show_connection_manager),
             ("▤  Logs SQLite",self.show_logs),
             ("⚙  Configuration du Core",self.show_core_preferences),
             ("◈  Verrouiller NOVA",self.lock_session),
@@ -494,6 +525,7 @@ class MainWindow(QMainWindow):
             "Ouvrir bibliothèque":self.show_catalog,
             "Paramètres NOVA":self.show_settings,
             "Sessions / Connexions":self.show_sessions,
+            "Créer une connexion":self.show_connection_manager,
             "Logs SQLite":self.show_logs,
             "Configuration du Core":self.show_core_preferences,
             "Verrouiller la session":self.lock_session,
