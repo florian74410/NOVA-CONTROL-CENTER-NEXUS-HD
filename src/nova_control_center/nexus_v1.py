@@ -205,8 +205,7 @@ class MainWindow(QMainWindow):
     def _apply_theme(self):
         pal = PALETTES[self.theme_name]
         QApplication.instance().setStyleSheet(stylesheet(pal))
-        self.desktop.theme = pal
-        self.desktop.setStyleSheet(f"QMdiArea {{ background: {pal.background}; border: 1px solid {pal.edge}; }}")
+        self.desktop.set_palette(pal)
         self.footer.setStyleSheet(f"border-top: 1px solid {pal.edge};")
         self.theme_button.setMenu(self._make_theme_menu())
         self._refresh_status()
