@@ -108,6 +108,7 @@ def test_private_ipc_socket_roundtrip_and_lock():
         {"id":"d"*32,"label":"SSH debug","protocol":"SSH","token":"UNSAFE"}])
     m=manifest("N3XV5-App.deb","f"*64)
     left,right=socket.socketpair()
+    broker._sockets[m.app_id]=left
     class Live:
         def poll(self):return None
     worker=threading.Thread(target=broker._serve,args=(m,Live(),left),daemon=True)
