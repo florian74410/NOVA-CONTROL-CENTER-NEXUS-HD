@@ -25,6 +25,7 @@ def main(argv=None):
     for filename,target in (
         ("nova_installer.py","installer.py"),
         ("nova_launcher.py","launcher.py"),
+        ("nova_downloader.py","downloader.py"),
         ("catalog.json","catalog.json")
     ):
         source=src/filename
