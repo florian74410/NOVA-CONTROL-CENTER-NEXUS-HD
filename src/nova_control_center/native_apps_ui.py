@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 from .control_panels import NovaDialog
 from .n3xv5_bridge import manifest_from_json
+from n3xv5_core.dependencies import sha256
 
 class NativeAppsDialog(NovaDialog):
     def __init__(self,palette,hub,parent=None):
@@ -68,11 +69,30 @@ class NativeAppsDialog(NovaDialog):
                 raise ValueError("Cette application ne cible pas Linux AMD64")
             if self.hub.session_manager.session.locked:
                 raise PermissionError("Déverrouille le HUB avant toute installation")
-            if manifest.dependencies:
-                raise ValueError(
-                    "Dépendances manquantes : importer les SHA-256 dans Dependancy "
-                    "avant de référencer l'application. Le catalogue sécurisé "
-                    "ne télécharge aucune bibliothèque.")
+            dependencies={}
+            missing=[d for d in manifest.dependencies
+                     if not self.hub.package_manager.deps.available(d)]
+            if missing:
+                folder=QFileDialog.getExistingDirectory(
+                    self,"Dossier local Dependancy fourni avec l'application")
+                if not folder:return
+                from os import walk
+                inspected=0
+                for directory,_,names in walk(folder,followlinks=False):
+                    for name in names:
+                        inspected+=1
+                        if inspected>500:raise ValueError("Trop de fichiers dans Dependancy (max 500)")
+                        asset=Path(directory)/name
+                        if asset.is_symlink() or not asset.is_file():
+                            continue
+                        if asset.stat().st_size>1024*1024*1024:
+                            continue
+                        checksum=sha256(asset)
+                        if checksum in missing:
+                            dependencies[checksum]=asset
+                unavailable=set(missing)-set(dependencies)
+                if unavailable:
+                    raise ValueError("Dépendances SHA-256 introuvables : "+", ".join(sorted(unavailable)))
             package,_=QFileDialog.getOpenFileName(
                 self,"Paquet natif Linux (.deb)","", "Debian package (*.deb)")
             if not package:return
@@ -83,7 +103,7 @@ class NativeAppsDialog(NovaDialog):
                      "Aucun droit n'est accordé automatiquement.")
             if QMessageBox.question(self,"Vérification / Importation",message)!=QMessageBox.StandardButton.Yes:
                 return
-            target=self.hub.package_manager.stage(manifest,package)
+            target=self.hub.package_manager.stage(manifest,package,dependencies)
             self.status.setText("Paquet vérifié et placé dans le cache : "+str(target))
             self.refresh()
         except (OSError,ValueError,PermissionError,TypeError,KeyError) as exc:
