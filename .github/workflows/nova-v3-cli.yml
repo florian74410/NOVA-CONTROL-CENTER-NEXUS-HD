@@ -1,0 +1,51 @@
+name: NOVA v3 CLI Launcher Kit
+on:
+  push:
+    branches: [work/nova-v3-installer-launcher]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  distro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Unit tests and build dependencies
+        run: |
+          python -m pip install --upgrade pip build pytest
+          python -m compileall -q deploy
+          python -m pytest -q tests/test_v3_distribution.py
+      - name: Build NOVA Control Center wheel
+        run: python -m build --wheel --outdir dist/
+      - name: Assemble launcher kit
+        run: |
+          mkdir -p dist/nova-suite-v3-kit
+          cp deploy/nova_installer.py deploy/nova_launcher.py deploy/nova_downloader.py deploy/bootstrap.py deploy/catalog.json dist/nova-suite-v3-kit/
+          cp dist/*.whl dist/nova-suite-v3-kit/
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          kits=Path("dist/nova-suite-v3-kit")
+          wheels=list(kits.glob("*.whl"))
+          if len(wheels)!=1:raise RuntimeError("Exactly one wheel expected")
+          wheel=wheels[0]
+          (kits/"SHA256SUMS.txt").write_text(
+              hashlib.sha256(wheel.read_bytes()).hexdigest()+"  "+wheel.name+"\n")
+          (kits/"README.txt").write_text(
+              "NOVA V3 PREVIEW KIT (not an automatic public release)\n"
+              "1. python3 bootstrap.py\n"
+              "2. python3 ~/.local/share/nova-suite/installer.py install "
+              "--version 3.0.0.dev0 --wheel ./"+wheel.name+" "
+              "--sha256 "+hashlib.sha256(wheel.read_bytes()).hexdigest()+"\n"
+              "3. nova-launcher\n"
+              "No public update manifest exists yet. Update checks report not configured.\n")
+          PY
+          cd dist
+          zip -qr nova-suite-v3-kit.zip nova-suite-v3-kit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nova-suite-v3-kit
+          path: dist/nova-suite-v3-kit.zip
+          retention-days: 30
