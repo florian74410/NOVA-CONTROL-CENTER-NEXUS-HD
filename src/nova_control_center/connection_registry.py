@@ -4,7 +4,7 @@ The active OS account is the owner of the NOVA session; 'administrator' is
 descriptive and does NOT grant process privileges or remote authentication.
 """
 from __future__ import annotations
-import getpass
+import pwd
 import json
 import os
 import re
@@ -42,8 +42,8 @@ class MachineIdentity:
     @staticmethod
     def current():
         import grp
-        uid=os.getuid()
-        name=getpass.getuser()
+        uid=os.geteuid()
+        name=pwd.getpwuid(uid).pw_name
         groups=set(os.getgroups())
         admin_groups={"sudo","wheel","admin"}
         admin=uid==0 or any(g.gr_name in admin_groups and g.gr_gid in groups for g in grp.getgrall())
