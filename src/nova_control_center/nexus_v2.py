@@ -74,7 +74,7 @@ def qss(p):
     QScrollBar::handle:vertical {background:#247095;border-radius:3px;}
     """ % (p.background,p.bright,p.accent,p.accent,p.accent,p.edge,p.bright,
            p.accent,p.bright,p.bright,p.accent,p.accent,p.accent,p.bright,
-           p.accent,p.bright,p.accent,p.accent)
+           p.accent,p.accent)
 
 class RoutedBar(QWidget):
     """QPainter PCB frame, independent of bitmap scaling."""
