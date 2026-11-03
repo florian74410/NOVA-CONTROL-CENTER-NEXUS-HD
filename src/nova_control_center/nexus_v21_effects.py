@@ -4,38 +4,57 @@ No unlicensed stock GIFs. Animations are native Qt and can be exported as GIF.
 """
 from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer, QPoint, QRectF, Signal, QVariantAnimation, QEasingCurve
-from PySide6.QtGui import QPainter, QPen, QColor, QLinearGradient, QFont
+from PySide6.QtGui import QPainter, QPen, QColor, QLinearGradient, QFont, QPixmap
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QGraphicsOpacityEffect
 from .nexus_v2_paint import draw_frame, qcolor, vector_icon
 
-class PulseIndicator(QWidget):
+class PulseIndicator(QLabel):
+    """Native QLabel paint path: avoids PySide6 Python QWidget.paintEvent crashes.
+
+    Animation changes a tiny off-screen QPixmap; QLabel handles final paint in
+    C++ (important for PySide6/Shiboken versions observed on Mint XFCE).
+    """
     def __init__(self,palette,parent=None):
         super().__init__(parent)
         self.palette=palette
         self.phase=0.0
         self.setFixedSize(28,28)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground,True)
         self.timer=QTimer(self)
-        self.timer.setInterval(55)
+        self.timer.setInterval(90)
         self.timer.timeout.connect(self.tick)
+        self._render()
         self.timer.start()
+
     def tick(self):
         if self.isVisible():
-            self.phase=(self.phase+.034)%1
-            self.update()
+            self.phase=(self.phase+.045)%1
+            self._render()
+
     def set_palette(self,p):
         self.palette=p
-        self.update()
-    def paintEvent(self,event):
-        painter=QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(qcolor(self.palette.accent,42))
-        painter.setPen(QPen(qcolor(self.palette.accent,75),1))
-        radius=8+self.phase*5
-        painter.drawEllipse(self.rect().center(),int(radius),int(radius))
-        painter.setBrush(qcolor("#26E6AC"))
-        painter.setPen(QPen(qcolor("#B8FFE7"),1))
-        painter.drawEllipse(self.rect().center(),4,4)
-        painter.end()
+        self._render()
+
+    def _render(self):
+        pm=QPixmap(28,28)
+        pm.fill(Qt.GlobalColor.transparent)
+        painter=QPainter(pm)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setBrush(qcolor(self.palette.accent,42))
+            painter.setPen(QPen(qcolor(self.palette.accent,75),1))
+            radius=8+self.phase*5
+            painter.drawEllipse(pm.rect().center(),int(radius),int(radius))
+            painter.setBrush(qcolor("#26E6AC"))
+            painter.setPen(QPen(qcolor("#B8FFE7"),1))
+            painter.drawEllipse(pm.rect().center(),4,4)
+            # Tiny red detail: symmetric circuit endpoints.
+            painter.setPen(QPen(QColor("#FF485D"),1.3))
+            painter.drawLine(1,12,1,17)
+            painter.drawLine(26,12,26,17)
+        finally:
+            painter.end()
+        self.setPixmap(pm)
 
 class Toast(QWidget):
     dismissed=Signal(object)
