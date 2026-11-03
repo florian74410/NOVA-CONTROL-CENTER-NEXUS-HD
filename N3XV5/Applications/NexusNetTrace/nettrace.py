@@ -455,10 +455,48 @@ def present(obj, json_mode: bool):
         print(obj)
 
 
+def publish_to_hub(command,output):
+    """Send a bounded, redacted diagnostic using the inherited Unix socket."""
+    from n3xv5_core.ipc import PeripheralClient
+    if command not in ("probe","dns","tcp","tls","har","correlate"):
+        raise ValueError("Unsupported publication")
+    if not os.environ.get("N3XV5_IPC_FD"):
+        raise RuntimeError("The CLI must be launched by the authenticated HUB")
+    data=dict(output)
+    if command=="har":
+        data["slowest"]=(data.get("slowest") or [])[:5]
+        data["failures"]=(data.get("failures") or [])[:3]
+    elif command=="correlate":
+        data["server_matches"]=(data.get("server_matches") or [])[:8]
+    # Keep payload well below the inherited socket's 8 KiB framing limit.
+    # All raw HAR requests, cookies and bodies were already dropped in analysis.
+    with_report={"command":command,"data":data}
+    from n3xv5_core.ipc import encode
+    while len(encode({"api":1,"id":"0"*16,"app_id":"nexus-nettrace",
+                      "method":"nettrace.publish","params":with_report}))>7600:
+        if command=="har" and data.get("slowest"):
+            data["slowest"].pop()
+        elif command=="har" and data.get("failures"):
+            data["failures"].pop()
+        elif command=="correlate" and data.get("server_matches"):
+            data["server_matches"].pop()
+        else:
+            raise ValueError("Report exceeds IPC limit")
+    client=PeripheralClient()
+    try:
+        result=client.request("nettrace.publish",with_report)
+    finally:
+        client.close()
+    if result.get("error") or not result.get("result",{}).get("accepted"):
+        raise PermissionError("HUB refused NetTrace publication")
+    return True
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="n3xv5-nettrace", description="N3XV5 NetTrace — VPS/Client HTTPS debug CLI")
     parser.add_argument("--json", action="store_true", help="Output redacted JSON")
+    parser.add_argument("--hub-publish", action="store_true", help="Send diagnostic to HUB iFrame through local authenticated socket")
     parser.add_argument("--output", help="Save the redacted diagnostic JSON to a local file")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("probe", help="Measure one HTTP(S) request")
@@ -520,6 +558,8 @@ def main(argv=None):
                 if hasattr(__import__("os"), "fchmod"):
                     __import__("os").fchmod(fd.fileno(), 0o600)
                 json.dump(output, fd, ensure_ascii=False, indent=2)
+        if args.hub_publish:
+            publish_to_hub(args.command,output)
         present(output, args.json)
         return 0 if not output.get("error") else 2
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
