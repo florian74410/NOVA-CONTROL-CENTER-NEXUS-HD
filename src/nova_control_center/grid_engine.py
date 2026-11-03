@@ -80,19 +80,19 @@ class Tile(QGraphicsObject):
         painter.setFont(font)
         painter.setPen(TEXT)
         heading = self.title if self.wcell >= 3 else self.title.split("/")[-1].strip()
-        painter.drawText(QRectF(7, 6, r.width()-14, 20),
+        painter.drawText(QRectF(7, 3, r.width()-14, 17),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, heading)
         painter.setPen(QPen(QColor("#246b8d"), 0.7))
-        painter.drawLine(QPointF(8, 29), QPointF(max(8,r.width()-8), 29))
+        painter.drawLine(QPointF(8, 22), QPointF(max(8,r.width()-8), 22))
         data = visible_items(self.data, self.wcell, self.hcell)
         painter.setFont(QFont("DejaVu Sans", 8))
         painter.setPen(TEXT)
-        available = max(0, r.height()-37)
+        available = max(0, r.height()-25)
         step = max(11, min(24, available/max(1,len(data))))
         for index, item in enumerate(data):
-            if 34+index*step+step > r.height(): break
+            if 24+index*step+step > r.height(): break
             label = item.value if self.wcell < 3 else f"{item.label}: {item.value}"
-            painter.drawText(QRectF(8, 34+index*step, max(1,r.width()-16), step),
+            painter.drawText(QRectF(8, 24+index*step, max(1,r.width()-16), step),
                              Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
 
     def mouseReleaseEvent(self, event):
