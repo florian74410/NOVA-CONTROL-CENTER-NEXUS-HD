@@ -74,4 +74,7 @@ def validate_manifest(app:AppManifest):
     for item in (*app.capabilities,*app.dependencies):
         if not isinstance(item,str) or len(item)>90 or not re.fullmatch(r"[a-zA-Z0-9_.:+/-]+",item):
             raise ValueError("Invalid capability or dependency reference")
+    for digest in app.dependencies:
+        if not SHA256.fullmatch(digest):
+            raise ValueError("Offline dependencies must be pinned by SHA-256")
     return app
