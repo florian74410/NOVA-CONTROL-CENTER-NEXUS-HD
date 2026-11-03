@@ -19,7 +19,7 @@ from .contracts import APP_ID,AppManifest,validate_manifest
 
 MAX_MESSAGE=8192
 ALLOWED_METHODS={"hello","profile.info","connections.list","connection.describe","session.ping","nettrace.publish"}
-NETTRACE_COMMANDS={"probe","dns","tcp","tls","har","correlate"}
+NETTRACE_COMMANDS={"probe","dns","tcp","tls","har","correlate","mesh"}
 
 def encode(message):
     raw=json.dumps(message,separators=(",",":"),ensure_ascii=False).encode("utf-8")+b"\n"
@@ -119,6 +119,7 @@ class LocalAppBroker:
                        "not_after","handshake_ms","error","type"},
                 "har":{"entries","errors","slowest","failures"},
                 "correlate":{"request_id","client","server_matches","hint"},
+                "mesh":{"nodes","edges","total","failures"},
             }[params["command"]]
             if set(data)-allowed:
                 raise ValueError("Unsupported diagnostic fields")
