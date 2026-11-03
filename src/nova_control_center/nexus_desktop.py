@@ -171,7 +171,8 @@ class NovaDesktop(QMdiArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setActivationOrder(QMdiArea.WindowOrder.StackingOrder)
         self.setStyleSheet("QMdiArea { background: #07101E; border: 1px solid #276B8C; }")
-        self.subWindowActivated.connect(lambda _: self.number_changed.emit(len(self.subWindowList())))\n        self._refresh_pcb()
+        self.subWindowActivated.connect(lambda _: self.number_changed.emit(len(self.subWindowList())))
+        self._refresh_pcb()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
