@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "suite": "NOVA",
+  "apps": [
+    {
+      "id": "nova-control-center",
+      "name": "NOVA Control Center",
+      "entrypoint": "nova-control-center",
+      "manifest_url": null,
+      "installer_url": null,
+      "installer_sha256": null,
+      "launcher_url": null,
+      "launcher_sha256": null,
+      "channel": "stable",
+      "description": "NEXUS HD native Qt control center"
+    }
+  ]
+}
