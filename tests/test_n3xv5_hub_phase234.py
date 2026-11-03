@@ -98,3 +98,30 @@ def test_new_hub_keeps_original_qt_shell(qtbot,tmp_path,monkeypatch):
     assert window.n3xv5.package_manager.platform==Platform.LINUX_X64
     window.n3xv5.broker.lock()
     window.close()
+
+def test_private_ipc_socket_roundtrip_and_lock():
+    import threading
+    from n3xv5_core.ipc import LocalAppBroker
+    profile=SuiteProfile.create("N3XV5 test")
+    profile=replace(profile,grants=(ProfileGrants("nexus-test-app",("connections.read",)),))
+    broker=LocalAppBroker(lambda:profile,lambda:[
+        {"id":"d"*32,"label":"SSH debug","protocol":"SSH","token":"UNSAFE"}])
+    m=manifest("N3XV5-App.deb","f"*64)
+    left,right=socket.socketpair()
+    class Live:
+        def poll(self):return None
+    worker=threading.Thread(target=broker._serve,args=(m,Live(),left),daemon=True)
+    worker.start()
+    right.sendall(encode({"api":1,"id":"1","app_id":m.app_id,
+                          "method":"connections.list","params":{}}))
+    data=b""
+    right.settimeout(3)
+    while not data.endswith(b"\n"):
+        data+=right.recv(4096)
+    response=decode(data)
+    assert response["result"]["connections"][0]["label"]=="SSH debug"
+    assert "UNSAFE" not in repr(response)
+    broker.lock()
+    worker.join(timeout=3)
+    assert not worker.is_alive()
+    right.close()
