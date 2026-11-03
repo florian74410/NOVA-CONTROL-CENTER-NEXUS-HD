@@ -384,7 +384,7 @@ class MainWindow(QMainWindow):
         else:self.showMaximized()
     def open_vps_category(self,category):
         # Placeholder category until IATB-CLI catalog has been mapped.
-        tile=self.grid_view.grid.add_tile("VPS IATB / "+category,2,3)
+        tile=self.grid_view.grid.add_tile("VPS IATB / "+category,3,3)
         self.workspace_stack.setCurrentWidget(self.grid_view)
         if tile is None:
             self.notifications.add("Grille pleine : aucune zone 2 x 3 disponible.","warning")
