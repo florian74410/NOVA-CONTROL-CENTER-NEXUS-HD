@@ -452,6 +452,7 @@ class MainWindow(QMainWindow):
             self.notifications.add("Grille pleine : aucune zone 3 x 3 disponible.","warning")
             return
         self.iatb_tiles[tile.key]={"category":category,"methods":methods,"results":{}}
+        self._save_grid_layout()
         self._poll_iatb()
 
     def _poll_iatb(self):
