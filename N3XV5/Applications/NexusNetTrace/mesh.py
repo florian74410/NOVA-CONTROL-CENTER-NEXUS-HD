@@ -175,7 +175,7 @@ def run_mesh(topology,probe_func,dns_func,tcp_func,tls_func,allow_remote=False,r
             if source.get("agent","local")=="ssh":
                 if not allow_remote:
                     raise PermissionError("Remote diagnostic needs explicit --allow-remote")
-                data=remote_func(source,edge["id"])
+                data=_redacted(remote_func(source,edge["id"]))
             else:
                 data=_redacted(inspect_link(edge,probe_func,dns_func,tcp_func,tls_func))
             status=data.get("status")
