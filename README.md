@@ -1,21 +1,24 @@
-# NOVA CONTROL CENTER — NEXUS HD V1
+# NOVA CONTROL CENTER — NEXUS HD V2 (Full Qt)
 
-Native **Full Qt / PySide6** Linux desktop workspace. Development branch: `work/nova-control-center-v1-fullqt`.
+**Native Linux Qt6 / PySide6 desktop shell** in the ElectroBlueNEON and RougeERROR design language.
 
-## Features
-- Fixed neon navbar; resizable left-side application list; 30px compact status bar (11pt).
-- Multi-window workspace with free placement, drag and drop, resize grip, minimize/maximize/close.
-- Mosaïque, cascade, context menu and command palette `Ctrl+K`.
-- ElectroBlueNEON / RougeERROR live palette switching.
-- Save and restore workspaces and palette in `~/.config/nova-control-center/v1.json`.
-- Four self-contained demonstration apps; NEXUS event bus test: Terminal demo publishes event, Explorer and Events receive it.
-- No SSH/SFTP/Docker connection in this release. Do not use with production credentials.
+## V2 UI development
+- Scalable vector-drawn chamfered glass frames with PCB routes, vias and neon glow.
+- Reusable SVG vector icon library.
+- Rich desktop with four local Qt demonstration applications and multiple instances.
+- Left application dock: double click or drag onto desktop.
+- Freeform draggable windows, resize handles, minimize/maximize/close.
+- Top navigation / grid / cascade / save and thin 11pt status strip.
+- Theme switching, animated light sweep on active windows, toggleable.
+- Ctrl+K command launcher, context menus and layout persistence.
+- Monitored local Linux CPU/RAM/disks through /proc and statvfs — no fictitious production metrics.
 
-## Installation (Linux Mint XFCE)
+## Try on Linux Mint XFCE
+
 ```bash
 sudo apt update
 sudo apt install -y python3-venv python3-pip libxcb-cursor0
-git clone -b work/nova-control-center-v1-fullqt https://github.com/florian74410/NOVA-CONTROL-CENTER-NEXUS-HD.git
+git clone -b work/nexus-v2-renderer https://github.com/florian74410/NOVA-CONTROL-CENTER-NEXUS-HD.git
 cd NOVA-CONTROL-CENTER-NEXUS-HD
 python3 -m venv .venv
 source .venv/bin/activate
@@ -23,6 +26,6 @@ python -m pip install -e .
 nova-control-center
 ```
 
-See [V1 architecture and limitations](docs/NEXUS_V1.md).
+The V2's SSH and SFTP windows are **local visual demonstrations**, not working remote-access clients. No server is contacted. The supplied three asset boards are the visual reference; the Qt renderer rebuilds scalable shapes rather than embedding fixed-size PNG sheets.
 
-This implementation reconstructs the neon interface in native Qt styles and scalable drawing, inspired by the three supplied UI design sheets. Their original bitmap files are not yet in GitHub and were not split into production 9-slice assets. The foundation is therefore a first functional visual implementation rather than a pixel-perfect reproduction. End-to-end GUI execution on Linux Mint XFCE is pending.
+For details, read [docs/NEXUS_V2.md](docs/NEXUS_V2.md). The V2 remains a development branch until Linux XFCE visual testing is complete.
