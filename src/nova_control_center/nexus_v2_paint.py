@@ -12,6 +12,7 @@ from PySide6.QtSvg import QSvgRenderer
 from .nexus_theme import PALETTES
 
 ICONS = {
+    "check": '<path d="m4 12 5 5 11-11"/>',
     "apps": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     "terminal": '<rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="m6 9 4 3-4 3 M12 16h6"/>',
     "folder": '<path d="M2 7V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/>',
