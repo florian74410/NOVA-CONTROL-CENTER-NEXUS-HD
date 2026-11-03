@@ -4,10 +4,10 @@ import json
 import sys
 from pathlib import Path
 from PySide6.QtCore import Qt, Signal, QObject, QSize, QRectF, QPoint, QEvent
-from PySide6.QtGui import QFont, QKeySequence, QAction, QPainter, QIcon
+from PySide6.QtGui import QFont, QKeySequence, QAction, QPainter, QIcon, QMovie
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout,
-    QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame
+    QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame, QWidgetAction
 )
 from .nexus_theme import PALETTES
 from .nexus_v2_paint import vector_icon, draw_frame
@@ -321,6 +321,26 @@ class MainWindow(QMainWindow):
         self.subtitle.setText("NEXUS HD 2.1  /  "+key.upper())
     def make_menu(self):
         menu=QMenu(self)
+        # Prefer original transparent GIF in the menu header; CSS fallback remains usable.
+        animated=(Path(__file__).resolve().parents[2] /
+                    "Assets"/"Generated"/"Animations"/self.theme_name/"pcb.gif")
+        if animated.is_file():
+            action_header=QWidgetAction(menu)
+            header=QWidget(menu)
+            row=QHBoxLayout(header)
+            row.setContentsMargins(12,3,12,3)
+            icon=QLabel(header)
+            movie=QMovie(str(animated),parent=icon)
+            movie.setScaledSize(QSize(46,46))
+            icon.setMovie(movie)
+            movie.start()
+            row.addWidget(icon)
+            title=QLabel("NEXUS // "+self.theme_name)
+            title.setObjectName("sectionHeader")
+            row.addWidget(title)
+            action_header.setDefaultWidget(header)
+            menu.addAction(action_header)
+            menu.addSeparator()
         actions=[
             ("⌂  Bureau",self.show_workspace),
             ("▦  Bibliothèque d'applications",self.show_catalog),
