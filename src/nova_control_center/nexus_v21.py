@@ -22,6 +22,7 @@ from .core_dialogs import LogsDialog, CorePreferencesDialog, UnlockDialog
 from .connection_registry import UserConnectionRegistry
 from .connection_session_cache import ConnectionSessionCache
 from .connection_manager_ui import ConnectionManagerDialog
+from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
 SETTINGS = Path.home()/".config"/"nova-control-center"/"v21.json"
@@ -151,6 +152,8 @@ class MainWindow(QMainWindow):
         self.log_store=LogStore()
         self.log_store.prune(self.preferences.log_retention_days,self.preferences.log_max_records)
         self.session_manager=SessionManager()
+        self.suite_profile_store=SuiteProfileStore()
+        self.suite_profile=self.suite_profile_store.ensure()
         self.connection_cache=ConnectionSessionCache(
             UserConnectionRegistry(),
             event_callback=lambda name,data:self.bus.publish(name,data))
@@ -167,6 +170,7 @@ class MainWindow(QMainWindow):
         if str(QSettings("NOVA","ControlCenter").value("restore_workspace","true")).lower()=="true":
             self.desktop.restore_snapshot(self.state.get("workspace",[]))
         self.connection_cache.preload()
+        self._sync_suite_connections()
         self._update_status()
         self.log_store.write("AUDIT","core","session.started","Session NOVA initialisée",
                              self.session_manager.session.session_id)
@@ -426,11 +430,18 @@ class MainWindow(QMainWindow):
             self._unlock_or_exit()
             if self.session_manager.session.locked:return
         dialog=ConnectionManagerDialog(self.palette,self.connection_cache,self)
-        dialog.saved.connect(lambda connection_id:self.log_store.write(
-            "AUDIT","connections","profile.saved","Profil enregistré",
-            self.session_manager.session.session_id))
+        dialog.saved.connect(self._suite_connection_saved)
         dialog.activated.connect(self._activate_connection)
         dialog.exec()
+
+    def _sync_suite_connections(self):
+        ids=[entry.profile.connection_id for entry in self.connection_cache.list()]
+        self.suite_profile=self.suite_profile_store.sync_connections(ids)
+
+    def _suite_connection_saved(self,connection_id):
+        self._sync_suite_connections()
+        self.log_store.write("AUDIT","connections","profile.saved",
+            "Profil de suite enregistré",self.session_manager.session.session_id)
 
     def _activate_connection(self,connection_id):
         self.session_manager.select_connection(connection_id)
@@ -469,6 +480,7 @@ class MainWindow(QMainWindow):
         dialog=UnlockDialog(self.palette,self.session_manager,self)
         if dialog.exec()==dialog.DialogCode.Accepted:
             self.connection_cache.unlock_and_reload()
+            self._sync_suite_connections()
             self.log_store.write("AUDIT","security","session.unlocked","Session déverrouillée",
                                  self.session_manager.session.session_id)
         else:
