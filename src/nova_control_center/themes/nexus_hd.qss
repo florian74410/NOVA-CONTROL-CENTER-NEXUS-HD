@@ -1,0 +1,66 @@
+/* NEXUS NOVA HD 0.8 inspired native styling: zero external assets.
+   Theme design will be reviewed against upstream NOVA assets before final adoption. */
+QWidget {
+    background: #0B1423;
+    color: #D7EBFA;
+    font-family: "DejaVu Sans", "Noto Sans", sans-serif;
+    font-size: 12px;
+}
+QMainWindow { background: #080F1B; }
+QLabel#brand {
+    color: #5ECCFF;
+    font-size: 19px;
+    font-weight: 700;
+    padding: 12px;
+    border-bottom: 1px solid #2D607D;
+}
+QLabel#panelHeading { color: #5AC7FF; font-weight: 700; padding: 4px; }
+QLabel#footer {
+    color: #58A4C7;
+    background: #07101C;
+    padding: 8px;
+    border-top: 1px solid #234561;
+}
+QListWidget#appCatalog {
+    background: #101D2F;
+    border: 1px solid #275274;
+    border-radius: 5px;
+    padding: 8px;
+}
+QListWidget::item { padding: 14px 8px; border-radius: 4px; }
+QListWidget::item:selected, QListWidget::item:hover {
+    color: #FFFFFF;
+    background: #174364;
+    border-left: 2px solid #45C5FF;
+}
+QMdiArea#workspace {
+    background: #091627;
+    border: 1px solid #204D6C;
+}
+QMdiSubWindow {
+    background: #111F34;
+    border: 1px solid #3E9BCB;
+}
+QPushButton {
+    background: #132F49;
+    color: #BEEBFF;
+    border: 1px solid #327DA5;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+QPushButton:hover { background: #1B557A; border-color: #61D4FF; }
+QPushButton:pressed { background: #0C7497; }
+QLineEdit, QPlainTextEdit, QTreeWidget {
+    background: #071321;
+    border: 1px solid #29516C;
+    color: #CBE9F8;
+    selection-background-color: #186389;
+    padding: 7px;
+}
+QPlainTextEdit#terminal {
+    color: #8EF0C1;
+    font-family: "DejaVu Sans Mono", monospace;
+}
+QSplitter::handle { background: #214763; width: 3px; }
+QScrollBar:vertical { width: 9px; background: #0D1B2B; }
+QScrollBar::handle:vertical { background: #28668B; border-radius: 3px; }
