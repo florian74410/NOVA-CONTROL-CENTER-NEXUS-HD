@@ -1,0 +1,21 @@
+name: N3XV5 Fresh Foundation Contracts
+on:
+  push:
+    branches: [work/n3xv5-fresh-multiplatform-foundation]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test portable contracts without UI dependencies
+        run: |
+          python -m pip install pytest
+          python -m compileall -q N3XV5/Core
+          PYTHONPATH=N3XV5/Core python -m pytest -q N3XV5/tests/test_foundation.py

@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "name": "NOVA Suite Shared Dependency Store",
+  "layout_version": 1,
+  "platform": "linux-x86_64",
+  "python_runtime": "CPython 3.11",
+  "apps": [
+    {
+      "id": "nova-control-center",
+      "version": "2.4.1.dev0",
+      "distribution": "nova_control_center-2.4.1.dev0-py3-none-any.whl",
+      "folder": "Apps/NOVA-Control-Center/wheels",
+      "requires": [
+        {
+          "name": "PySide6",
+          "version": "6.8.3",
+          "scope": "common",
+          "filename": null,
+          "sha256": null
+        },
+        {
+          "name": "PySide6_Essentials",
+          "version": "6.8.3",
+          "scope": "common",
+          "filename": null,
+          "sha256": null
+        },
+        {
+          "name": "PySide6_Addons",
+          "version": "6.8.3",
+          "scope": "common",
+          "filename": null,
+          "sha256": null
+        },
+        {
+          "name": "shiboken6",
+          "version": "6.8.3",
+          "scope": "common",
+          "filename": null,
+          "sha256": null
+        }
+      ]
+    }
+  ],
+  "dependency_policy": {
+    "shared_cache": true,
+    "isolated_runtime_per_app": true,
+    "offline_only": true,
+    "verify_sha256": true
+  },
+  "future_apps": []
+}
