@@ -17,3 +17,6 @@ nova-control-center = "nova_control_center.nexus_v2:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"nova_control_center" = ["qml/*.qml"]
