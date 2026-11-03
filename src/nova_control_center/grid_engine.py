@@ -172,6 +172,17 @@ class GridScene(QGraphicsScene):
         self.changed.emit()
         return tile
 
+    def add_at(self,title,x,y,w,h,items=None):
+        if (w,h) not in SIZES.values() or not self.can_place(x,y,w,h):
+            return None
+        self.serial += 1
+        key=str(self.serial)
+        tile=Tile(self,key,title,x,y,w,h,items)
+        self.tiles[key]=tile
+        self.addItem(tile)
+        self.changed.emit()
+        return tile
+
     def remove_tile(self, key):
         tile = self.tiles.pop(str(key),None)
         if tile is not None:
