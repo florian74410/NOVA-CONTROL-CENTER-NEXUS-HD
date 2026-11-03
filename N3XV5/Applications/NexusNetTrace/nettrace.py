@@ -471,9 +471,10 @@ def publish_to_hub(command,output):
     # Keep payload well below the inherited socket's 8 KiB framing limit.
     # All raw HAR requests, cookies and bodies were already dropped in analysis.
     with_report={"command":command,"data":data}
-    from n3xv5_core.ipc import encode
-    while len(encode({"api":1,"id":"0"*16,"app_id":"nexus-nettrace",
-                      "method":"nettrace.publish","params":with_report}))>7600:
+    # Test size before encode() (which rightly refuses oversized frames).
+    while len(json.dumps({"api":1,"id":"0"*16,"app_id":"nexus-nettrace",
+                          "method":"nettrace.publish","params":with_report},
+                         ensure_ascii=False).encode("utf-8"))>7000:
         if command=="har" and data.get("slowest"):
             data["slowest"].pop()
         elif command=="har" and data.get("failures"):
