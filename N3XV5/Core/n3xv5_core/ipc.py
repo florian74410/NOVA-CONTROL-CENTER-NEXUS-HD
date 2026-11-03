@@ -18,7 +18,8 @@ from pathlib import Path
 from .contracts import APP_ID,AppManifest,validate_manifest
 
 MAX_MESSAGE=8192
-ALLOWED_METHODS={"hello","profile.info","connections.list","connection.describe","session.ping"}
+ALLOWED_METHODS={"hello","profile.info","connections.list","connection.describe","session.ping","nettrace.publish"}
+NETTRACE_COMMANDS={"probe","dns","tcp","tls","har","correlate"}
 
 def encode(message):
     raw=json.dumps(message,separators=(",",":"),ensure_ascii=False).encode("utf-8")+b"\n"
@@ -43,9 +44,10 @@ class AppSession:
 
 class LocalAppBroker:
     """Process-verified broker; capability permissions checked per request."""
-    def __init__(self,profile_provider,connections_provider):
+    def __init__(self,profile_provider,connections_provider,event_callback=None):
         self.profile_provider=profile_provider
         self.connections_provider=connections_provider
+        self.event_callback=event_callback
         self._processes={}
         self._sockets={}
         self._locked=False
@@ -95,6 +97,36 @@ class LocalAppBroker:
         if self._locked:raise PermissionError("HUB locked")
         profile=self.profile_provider()
         if profile is None:raise PermissionError("No active profile")
+        if method=="nettrace.publish":
+            if manifest.app_id!="nexus-nettrace":
+                raise PermissionError("Only NetTrace may publish network diagnostics")
+            if not self._allowed(manifest,"nettrace.publish"):
+                raise PermissionError("nettrace.publish denied")
+            if not isinstance(params,dict) or params.get("command") not in NETTRACE_COMMANDS:
+                raise ValueError("Unknown NetTrace diagnostic")
+            data=params.get("data")
+            if not isinstance(data,dict):
+                raise ValueError("NetTrace report must be an object")
+            # No raw headers/bodies/cookies. A strict whitelist of operational
+            # data is accepted, and the GUI applies its own smaller projection.
+            allowed={
+                "probe":{"target","request_id","method","status","http_version","remote_ip",
+                         "duration_ms","timings_ms","size_download_bytes","tls_verify_result",
+                         "response_headers","error","curl_exit_code","diagnosis","engine","tls_version"},
+                "dns":{"host","addresses","duration_ms","error","error_code"},
+                "tcp":{"host","port","open","duration_ms","error","error_code"},
+                "tls":{"host","port","valid","tls_version","cipher","subject","issuer",
+                       "not_after","handshake_ms","error","type"},
+                "har":{"entries","errors","slowest","failures"},
+                "correlate":{"request_id","client","server_matches","hint"},
+            }[params["command"]]
+            if set(data)-allowed:
+                raise ValueError("Unsupported diagnostic fields")
+            if len(encode({"data":data}))>7000:
+                raise ValueError("NetTrace report too large")
+            if self.event_callback is not None:
+                self.event_callback(manifest.app_id,{"command":params["command"],"data":data})
+            return {"accepted":True,"command":params["command"]}
         if method=="hello":
             return {"api":1,"app_id":manifest.app_id}
         if method=="session.ping":
@@ -121,7 +153,9 @@ class LocalAppBroker:
     def _serve(self,manifest,proc,conn):
         try:
             with conn,conn.makefile("rb") as reader:
-                while not self._locked and proc.poll() is None:
+                # Short-lived CLI may exit after writing its report; drain
+                # the socket to EOF even if its process has already exited.
+                while not self._locked:
                     raw=reader.readline(MAX_MESSAGE+1)
                     if not raw:break
                     try:
