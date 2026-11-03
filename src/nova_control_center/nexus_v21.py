@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 from PySide6.QtCore import Qt, Signal, QObject, QSize, QRectF, QPoint, QEvent, QTimer
-from PySide6.QtGui import QFont, QKeySequence, QAction, QPainter, QIcon, QMovie
+from PySide6.QtGui import QFont, QKeySequence, QAction, QPainter, QIcon, QMovie, QPen, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout,
     QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame, QWidgetAction
@@ -78,14 +78,39 @@ class RoutedBar(QWidget):
         self.draggable=draggable
         self._manual_offset=None
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._trace_phase=0
+        self._trace_timer=QTimer(self)
+        self._trace_timer.setInterval(110)
+        self._trace_timer.timeout.connect(self._advance_trace)
+        self._trace_timer.start()
+    def _advance_trace(self):
+        if self.isVisible():
+            self._trace_phase=(self._trace_phase+1)%80
+            self.update()
     def set_palette(self,p):
         self.palette=p
         self.update()
     def paintEvent(self,event):
         painter=QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        draw_frame(painter,QRectF(self.rect()).adjusted(4,4,-4,-4),self.palette,.87)
-        painter.end()
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            draw_frame(painter,QRectF(self.rect()).adjusted(4,4,-4,-4),self.palette,.87,
+                       animated=self._trace_phase/80)
+            red=QColor("#FF3E57")
+            red.setAlpha(118)
+            painter.setPen(QPen(red,1.3))
+            h=self.height()
+            if h>20:
+                painter.drawLine(8,19,8,min(h-15,70))
+                painter.drawLine(self.width()-9,max(14,h-71),self.width()-9,h-19)
+                red.setAlpha(208)
+                painter.setPen(QPen(red,2.0))
+                travel=max(1,h-38)
+                y=19+(self._trace_phase*travel//80)
+                painter.drawLine(8,y,8,min(h-12,y+13))
+                painter.drawLine(self.width()-9,max(12,h-y-13),self.width()-9,h-y)
+        finally:
+            painter.end()
     def mousePressEvent(self,event):
         if self.draggable and event.button()==Qt.MouseButton.LeftButton:
             host=self.window()
