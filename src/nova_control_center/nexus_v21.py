@@ -212,6 +212,10 @@ class MainWindow(QMainWindow):
         left.addWidget(heading)
         self.catalog=AppShelf(self.registry.descriptors(),self.palette)
         self.catalog.launch_requested.connect(self.open_application)
+        self.catalog.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.catalog.customContextMenuRequested.connect(
+            lambda pos: self.make_menu().exec(self.catalog.mapToGlobal(pos))
+        )
         left.addWidget(self.catalog,1)
         self.empty_catalog=QLabel("Aucun module installé.\n\nAjoute une application Qt\npour la voir ici.")
         self.empty_catalog.setWordWrap(True)
@@ -232,6 +236,10 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.sidebar)
         self.desktop=NexusDesktop(self.registry.descriptors(),self.bus,self.palette)
         self.desktop.number_changed.connect(self._update_status)
+        self.desktop.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.desktop.customContextMenuRequested.connect(
+            lambda pos: self.make_menu().exec(self.desktop.mapToGlobal(pos))
+        )
         splitter.addWidget(self.desktop)
         splitter.setStretchFactor(1,1)
         splitter.setSizes([223,1200])
