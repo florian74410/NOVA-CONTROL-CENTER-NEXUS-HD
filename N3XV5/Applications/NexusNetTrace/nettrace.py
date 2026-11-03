@@ -73,8 +73,9 @@ def safe_header_map(raw_headers):
     if isinstance(raw_headers, dict):
         pairs = raw_headers.items()
     else:
-        pairs = ((x.get("name"), x.get("value")) for x in raw_headers
-                 if isinstance(x, dict))
+        pairs = ((x.get("name"), x.get("value")) if isinstance(x, dict) else (x[0], x[1])
+                 for x in raw_headers
+                 if isinstance(x, dict) or (isinstance(x, (tuple, list)) and len(x) == 2))
     for name, value in pairs:
         key = str(name or "").lower()
         if key not in SAFE_HEADERS:
