@@ -357,10 +357,17 @@ class MainWindow(QMainWindow):
         self.log_store.write("AUDIT","sessions","profiles.opened","Portail connexions ouvert",
                              self.session_manager.session.session_id)
         dialog=ControlSessionsDialog(self.palette,self)
-        dialog.ssh_verified.connect(
-            lambda name,ok:self.notifications.add(
+        def on_verified(name,ok):
+            if ok:self.session_manager.select_connection(name)
+            self.log_store.write("AUDIT","sessions",
+                "ssh.verified" if ok else "ssh.failed",
+                "Test SSH réussi" if ok else "Test SSH échoué",
+                self.session_manager.session.session_id,
+                {"profile":name})
+            self.notifications.add(
                 f"SSH {name} : "+("connexion vérifiée" if ok else "échec de connexion"),
-                "success" if ok else "error"))
+                "success" if ok else "error")
+        dialog.ssh_verified.connect(on_verified)
         dialog.exec()
     def show_logs(self):
         dialog=LogsDialog(self.palette,self.log_store,self.preferences,self)
