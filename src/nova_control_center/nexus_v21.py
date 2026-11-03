@@ -141,6 +141,9 @@ class MainWindow(QMainWindow):
         self._idle_timer.timeout.connect(self._check_idle_lock)
         self._idle_timer.start()
         QApplication.instance().installEventFilter(self)
+        if self.session_manager.has_pin():
+            self.session_manager.lock()
+            QTimer.singleShot(0,self._unlock_or_exit)
     def _build(self):
         root=QWidget(self)
         root.setObjectName("root")
@@ -527,11 +530,14 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self,"notifications"):self.notifications.rearrange()
     def closeEvent(self,event):
-        self.log_store.write("AUDIT","core","session.ended","Fermeture du portail",
-                             self.session_manager.session.session_id)
-        QApplication.instance().removeEventFilter(self)
-        self.save_state()
-        self.log_store.close()
+        if not getattr(self,"_core_closed",False):
+            self._core_closed=True
+            self._idle_timer.stop()
+            QApplication.instance().removeEventFilter(self)
+            self.log_store.write("AUDIT","core","session.ended","Fermeture du portail",
+                                 self.session_manager.session.session_id)
+            self.save_state()
+            self.log_store.close()
         super().closeEvent(event)
 
 def main():
