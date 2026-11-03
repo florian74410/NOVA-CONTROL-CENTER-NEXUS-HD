@@ -138,7 +138,8 @@ class NovaSubWindow(QMdiSubWindow):
         grip_row.addWidget(grip)
         layout.addLayout(grip_row)
         self.setWidget(container)
-        self.resize(490, 330)\n        self.apply_palette(None)
+        self.resize(490, 330)
+        self.apply_palette(None)
 
     def apply_palette(self, palette):
         accent = palette.accent if palette else "#00CFFF"
