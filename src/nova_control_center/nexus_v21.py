@@ -1,4 +1,4 @@
-"""NOVA CONTROL CENTER 2.1 — clean frameless Qt shell without fake applications."""
+"""NOVA CONTROL CENTER 2.4.1 — NEXUS HD XFCE-compatible animated Qt shell."""
 from __future__ import annotations
 import json
 import sys
@@ -141,7 +141,7 @@ class RoutedBar(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NOVA CONTROL CENTER — NEXUS HD 2.3")
+        self.setWindowTitle("NOVA CONTROL CENTER — NEXUS HD 2.4.1")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.resize(1480,890)
         self.setMinimumSize(920,550)
@@ -501,7 +501,7 @@ class MainWindow(QMainWindow):
         for b,icon in self.header_buttons:
             b.setIcon(vector_icon(icon,self.palette.bright))
         self.menu_button.setMenu(self.make_menu())
-        self.subtitle.setText("NEXUS HD 2.1  /  "+key.upper())
+        self.subtitle.setText("NEXUS HD 2.4.1  /  "+key.upper())
     def make_menu(self):
         menu=QMenu(self)
         # Prefer original transparent GIF in the menu header; CSS fallback remains usable.
@@ -559,7 +559,7 @@ class MainWindow(QMainWindow):
         self.notifications.add("Animations "+("activées" if self.desktop.effect_enabled else "désactivées"),"info")
     def show_about(self):
         QMessageBox.information(self,"NOVA CONTROL CENTER",
-            "NEXUS HD 2.1 — Framework Full Qt natif.\n"
+            "NEXUS HD 2.4.1 — Framework Full Qt natif.\n"
             "Aucune application fictive n'est chargée.\n"
             "Les applications devront être installées et autorisées séparément.")
     def command_palette(self):
