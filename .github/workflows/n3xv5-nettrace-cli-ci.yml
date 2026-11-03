@@ -1,7 +1,7 @@
-name: N3XV5 NetTrace CLI - tests and portable Linux package
+name: N3XV5 NetTrace CLI 0.2 HUB 2D IPC
 on:
   push:
-    branches: [work/n3xv5-nettrace-cli-v1]
+    branches: [work/n3xv5-nettrace-hub-2d-ipc]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -70,7 +70,7 @@ jobs:
           install -m 755 dist/n3xv5-nettrace "$PKG/usr/bin/n3xv5-nettrace"
           cat > "$PKG/DEBIAN/control" <<EOF
           Package: n3xv5-nettrace
-          Version: 0.1.0~dev1
+          Version: 0.2.0~dev1
           Section: net
           Priority: optional
           Architecture: amd64
@@ -79,22 +79,22 @@ jobs:
           Description: N3XV5 NetTrace network diagnostics CLI
            Offline-capable HTTPS/TCP/TLS/DNS diagnostics, HAR and VPS log correlation.
           EOF
-          dpkg-deb --build --root-owner-group "$PKG" dist/n3xv5-nettrace_0.1.0_amd64.deb
+          dpkg-deb --build --root-owner-group "$PKG" dist/n3xv5-nettrace_0.2.0_amd64.deb
           python - <<'PY'
           import hashlib,json
           from pathlib import Path
-          f=Path("dist/n3xv5-nettrace_0.1.0_amd64.deb")
+          f=Path("dist/n3xv5-nettrace_0.2.0_amd64.deb")
           digest=hashlib.sha256(f.read_bytes()).hexdigest()
           manifest={
             "app_id":"nexus-nettrace",
             "name":"N3XV5 NetTrace CLI",
-            "version":"0.1.0",
+            "version":"0.2.0",
             "platform":"linux-x64",
             "package_name":f.name,
             "package_sha256":digest,
             "executable":"bin/n3xv5-nettrace",
             "ipc_api":1,
-            "capabilities":["profile.read","connections.read"],
+            "capabilities":["profile.read","connections.read","nettrace.publish"],
             "dependencies":[]
           }
           Path("dist/n3xv5-nettrace.manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
@@ -105,14 +105,14 @@ jobs:
                 out.write(f"{h}  {path.name}\n")
           print("Manifest SHA256 =",digest)
           PY
-          dpkg-deb --info dist/n3xv5-nettrace_0.1.0_amd64.deb
+          dpkg-deb --info dist/n3xv5-nettrace_0.2.0_amd64.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: N3XV5-NetTrace-CLI-0.1.0-Linux-amd64
+          name: N3XV5-NetTrace-CLI-0.2.0-Linux-amd64
           path: |
             dist/n3xv5-nettrace
             dist/n3xv5-nettrace.pyz
-            dist/n3xv5-nettrace_0.1.0_amd64.deb
+            dist/n3xv5-nettrace_0.2.0_amd64.deb
             dist/n3xv5-nettrace.manifest.json
             dist/SHA256SUMS.txt
           retention-days: 30
