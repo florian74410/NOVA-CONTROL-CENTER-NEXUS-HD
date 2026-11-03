@@ -24,7 +24,8 @@ from .connection_session_cache import ConnectionSessionCache
 from .connection_manager_ui import ConnectionManagerDialog
 from .n3xv5_bridge import N3XV5Host
 from .native_apps_ui import NativeAppsDialog
-from .grid_engine import GridView
+from .grid_engine import GridView, DisplayItem
+from .iatb_socket_client import HubSocketClient
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -324,6 +325,14 @@ class MainWindow(QMainWindow):
             lambda pos: self.make_menu().exec(self.desktop.mapToGlobal(pos))
         )
         self.grid_view=GridView(self)
+        self.iatb_socket=HubSocketClient(parent=self)
+        self.iatb_socket.result.connect(self._on_iatb_result)
+        self.iatb_socket.failed.connect(self._on_iatb_error)
+        self.iatb_tiles={}
+        self.iatb_poll=QTimer(self)
+        self.iatb_poll.setInterval(10000)
+        self.iatb_poll.timeout.connect(self._poll_iatb)
+        self.iatb_poll.start()
         self.workspace_stack=QStackedWidget(self)
         self.workspace_stack.addWidget(self.desktop)
         self.workspace_stack.addWidget(self.grid_view)
@@ -383,13 +392,56 @@ class MainWindow(QMainWindow):
         if self.isMaximized():self.showNormal()
         else:self.showMaximized()
     def open_vps_category(self,category):
-        # Placeholder category until IATB-CLI catalog has been mapped.
-        tile=self.grid_view.grid.add_tile("VPS IATB / "+category,3,3)
+        methods={
+            "Vitalité":["vps.status","vps.resources","gen1.status"],
+            "Actions":["gen1.status"],
+            "Services":["vps.ps","gen1.apps.health"],
+            "Journaux":["vps.logs.fundamental"],
+            "Réseau":["gen1.caddy.check"],
+        }.get(category,["vps.status"])
+        tile=self.grid_view.grid.add_tile("VPS IATB / "+category,3,3,
+                                          [DisplayItem("Connexion","En attente…",1)])
         self.workspace_stack.setCurrentWidget(self.grid_view)
         if tile is None:
-            self.notifications.add("Grille pleine : aucune zone 2 x 3 disponible.","warning")
-        else:
-            self.notifications.add("Widget VPS IATB / "+category+" créé.","success")
+            self.notifications.add("Grille pleine : aucune zone 3 x 3 disponible.","warning")
+            return
+        self.iatb_tiles[tile.key]={"methods":methods,"results":{}}
+        self._poll_iatb()
+
+    def _poll_iatb(self):
+        # One CLI socket request per method, shared by all matching widgets.
+        methods=set()
+        for key,info in list(self.iatb_tiles.items()):
+            if key not in self.grid_view.grid.tiles:
+                self.iatb_tiles.pop(key,None)
+            else:
+                methods.update(info["methods"])
+        for method in sorted(methods):
+            self.iatb_socket.request(method)
+
+    def _on_iatb_result(self,method,result):
+        for key,info in list(self.iatb_tiles.items()):
+            tile=self.grid_view.grid.tiles.get(key)
+            if tile is None or method not in info["methods"]:
+                continue
+            values=result.get("items") if isinstance(result,dict) else None
+            if not isinstance(values,list):
+                values=[{"label":method,"value":str(result),"priority":1}]
+            info["results"][method]=[
+                DisplayItem(str(item.get("label",method)),
+                            str(item.get("value","")).strip().replace("\\n"," | ")[:250],
+                            int(item.get("priority",1)))
+                for item in values if isinstance(item,dict)]
+            tile.set_data([item for name in info["methods"]
+                           for item in info["results"].get(name,[])])
+
+    def _on_iatb_error(self,method,error):
+        for key,info in self.iatb_tiles.items():
+            tile=self.grid_view.grid.tiles.get(key)
+            if tile is not None and method in info["methods"]:
+                info["results"][method]=[DisplayItem(method,"Indisponible : "+error[:80],1)]
+                tile.set_data([item for name in info["methods"]
+                               for item in info["results"].get(name,[])])
 
     def open_application(self,app_id):
         if app_id not in self.desktop.registry:return
