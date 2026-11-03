@@ -8,14 +8,14 @@ def test_v2_theme_workspace_and_local_event(qtbot, tmp_path, monkeypatch):
     win=MainWindow()
     qtbot.addWidget(win)
     assert len(win.desktop.subWindowList()) == 4
-    win.open_app("demo.terminal")
+    win.open_app("showcase.reactor")
     assert len(win.desktop.subWindowList()) == 5
     for key in ("RougeERROR","ElectroBlueNEON"):
         win.apply_theme(key)
         assert win.theme_name == key
     win.desktop.tileSubWindows()
     win.desktop.cascadeSubWindows()
-    win.bus.publish("demo.file.changed",{"path":"/demo/nova.json"})
+    win.bus.publish("showcase.event",{"panel":"routing"})
     win.save_workspace()
     assert (tmp_path/"v2.json").exists()
     assert len(win.desktop.snapshot()) == 5
