@@ -22,6 +22,8 @@ from .core_dialogs import LogsDialog, CorePreferencesDialog, UnlockDialog
 from .connection_registry import UserConnectionRegistry
 from .connection_session_cache import ConnectionSessionCache
 from .connection_manager_ui import ConnectionManagerDialog
+from .n3xv5_bridge import N3XV5Host
+from .native_apps_ui import NativeAppsDialog
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -142,7 +144,7 @@ class RoutedBar(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("NOVA CONTROL CENTER — NEXUS HD 2.4.1")
+        self.setWindowTitle("N3XV5 N0v4 HUD — HUB 2.5.0")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.resize(1480,890)
         self.setMinimumSize(920,550)
@@ -157,6 +159,8 @@ class MainWindow(QMainWindow):
         self.connection_cache=ConnectionSessionCache(
             UserConnectionRegistry(),
             event_callback=lambda name,data:self.bus.publish(name,data))
+        self.n3xv5=N3XV5Host(self.suite_profile_store,self.connection_cache,
+                             self.session_manager)
         self.registry=ApplicationRegistry()  # zero fake modules
         self.state=self.load_state()
         self.theme_name=self.state.get("theme","ElectroBlueNEON")
@@ -182,6 +186,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(2500,self._start_update_check)
         if self.session_manager.has_pin():
             self.session_manager.lock()
+            self.n3xv5.lock()
             self.connection_cache.invalidate()
             QTimer.singleShot(0,self._unlock_or_exit)
     def _build(self):
@@ -204,10 +209,10 @@ class MainWindow(QMainWindow):
         head.addWidget(self.logo)
         titles=QVBoxLayout()
         titles.setSpacing(0)
-        self.brand=QLabel("NOVA CONTROL CENTER")
+        self.brand=QLabel("N3XV5 N0v4 HUD")
         self.brand.setObjectName("brand")
         titles.addWidget(self.brand)
-        self.subtitle=QLabel("NEXUS HD 2.3  /  ELECTROBLUENEON")
+        self.subtitle=QLabel("HUB CORE 2.5.0  /  ELECTROBLUENEON")
         self.subtitle.setObjectName("subtitle")
         titles.addWidget(self.subtitle)
         head.addLayout(titles)
@@ -215,7 +220,7 @@ class MainWindow(QMainWindow):
         self.header_buttons=[]
         for label,ico,action in (
             ("Bureau","home",self.show_workspace),
-            ("Applications","apps",self.show_catalog),
+            ("Applications natives","apps",self.show_catalog),
             ("Espaces","layers",self.show_workspaces),
             ("Paramètres","settings",self.show_settings),
             ("Sessions","shield",self.show_sessions),
@@ -376,8 +381,11 @@ class MainWindow(QMainWindow):
     def show_workspace(self):
         self.notifications.add("Bureau NOVA prêt — dépose ici tes applications Qt.","success")
     def show_catalog(self):
-        found=discover_manifests(INSTALLED)
-        self.notifications.add(f"Applications détectées : {len(found)}. Activation manuelle requise.","info")
+        if self.session_manager.session.locked:
+            self._unlock_or_exit()
+            if self.session_manager.session.locked:return
+        dialog=NativeAppsDialog(self.palette,self.n3xv5,self)
+        dialog.exec()
     def show_workspaces(self):
         self.notifications.add("Espace actuel sauvegardable depuis le menu NEXUS.","info")
     def show_settings(self):
@@ -470,6 +478,7 @@ class MainWindow(QMainWindow):
             self.notifications.add("Configure un PIN dans Configuration Core avant de verrouiller.","warning")
             return
         if self.session_manager.lock():
+            self.n3xv5.lock()
             self.connection_cache.invalidate()
             self.log_store.write("AUDIT","security","session.locked","Verrouillage manuel",
                                  self.session_manager.session.session_id)
@@ -481,6 +490,7 @@ class MainWindow(QMainWindow):
         if dialog.exec()==dialog.DialogCode.Accepted:
             self.connection_cache.unlock_and_reload()
             self._sync_suite_connections()
+            self.n3xv5.unlock()
             self.log_store.write("AUDIT","security","session.unlocked","Session déverrouillée",
                                  self.session_manager.session.session_id)
         else:
@@ -492,6 +502,7 @@ class MainWindow(QMainWindow):
             self.log_store.write("AUDIT","security","session.auto_locked",
                 "Verrouillage après inactivité",self.session_manager.session.session_id)
             self.session_manager.lock()
+            self.n3xv5.lock()
             self.connection_cache.invalidate()
             self._unlock_or_exit()
 
@@ -513,7 +524,7 @@ class MainWindow(QMainWindow):
         for b,icon in self.header_buttons:
             b.setIcon(vector_icon(icon,self.palette.bright))
         self.menu_button.setMenu(self.make_menu())
-        self.subtitle.setText("NEXUS HD 2.4.1  /  "+key.upper())
+        self.subtitle.setText("N3XV5 HUB 2.5.0  /  "+key.upper())
     def make_menu(self):
         menu=QMenu(self)
         # Prefer original transparent GIF in the menu header; CSS fallback remains usable.
@@ -631,6 +642,7 @@ class MainWindow(QMainWindow):
             QApplication.instance().removeEventFilter(self)
             self.log_store.write("AUDIT","core","session.ended","Fermeture du portail",
                                  self.session_manager.session.session_id)
+            self.n3xv5.close()
             self.save_state()
             self.log_store.close()
         super().closeEvent(event)
