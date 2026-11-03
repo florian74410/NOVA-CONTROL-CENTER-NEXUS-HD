@@ -1,7 +1,7 @@
-name: N3XV5 NetTrace CLI 0.2 HUB 2D IPC
+name: N3XV5 NetTrace CLI 0.3 Multi VPS Mesh
 on:
   push:
-    branches: [work/n3xv5-nettrace-hub-2d-ipc]
+    branches: [work/n3xv5-nettrace-multivps-mesh]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -19,7 +19,7 @@ jobs:
         run: |
           python -m pip install pytest pyinstaller==6.16.0
           python -m compileall -q N3XV5/Applications/NexusNetTrace
-          python -m pytest -q tests/test_n3xv5_nettrace.py
+          python -m pytest -q tests/test_n3xv5_nettrace.py tests/test_n3xv5_nettrace_mesh.py
       - name: Create pure Python zipapp (stdlib only)
         run: |
           mkdir -p dist
@@ -70,7 +70,7 @@ jobs:
           install -m 755 dist/n3xv5-nettrace "$PKG/usr/bin/n3xv5-nettrace"
           cat > "$PKG/DEBIAN/control" <<EOF
           Package: n3xv5-nettrace
-          Version: 0.2.0~dev1
+          Version: 0.3.0~dev1
           Section: net
           Priority: optional
           Architecture: amd64
@@ -79,16 +79,16 @@ jobs:
           Description: N3XV5 NetTrace network diagnostics CLI
            Offline-capable HTTPS/TCP/TLS/DNS diagnostics, HAR and VPS log correlation.
           EOF
-          dpkg-deb --build --root-owner-group "$PKG" dist/n3xv5-nettrace_0.2.0_amd64.deb
+          dpkg-deb --build --root-owner-group "$PKG" dist/n3xv5-nettrace_0.3.0_amd64.deb
           python - <<'PY'
           import hashlib,json
           from pathlib import Path
-          f=Path("dist/n3xv5-nettrace_0.2.0_amd64.deb")
+          f=Path("dist/n3xv5-nettrace_0.3.0_amd64.deb")
           digest=hashlib.sha256(f.read_bytes()).hexdigest()
           manifest={
             "app_id":"nexus-nettrace",
             "name":"N3XV5 NetTrace CLI",
-            "version":"0.2.0",
+            "version":"0.3.0",
             "platform":"linux-x64",
             "package_name":f.name,
             "package_sha256":digest,
@@ -105,14 +105,14 @@ jobs:
                 out.write(f"{h}  {path.name}\n")
           print("Manifest SHA256 =",digest)
           PY
-          dpkg-deb --info dist/n3xv5-nettrace_0.2.0_amd64.deb
+          dpkg-deb --info dist/n3xv5-nettrace_0.3.0_amd64.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: N3XV5-NetTrace-CLI-0.2.0-Linux-amd64
+          name: N3XV5-NetTrace-CLI-0.3.0-Linux-amd64
           path: |
             dist/n3xv5-nettrace
             dist/n3xv5-nettrace.pyz
-            dist/n3xv5-nettrace_0.2.0_amd64.deb
+            dist/n3xv5-nettrace_0.3.0_amd64.deb
             dist/n3xv5-nettrace.manifest.json
             dist/SHA256SUMS.txt
           retention-days: 30
