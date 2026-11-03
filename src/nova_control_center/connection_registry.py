@@ -16,6 +16,7 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any
 from .core_settings import xdg_config
+from .suite_profile import SuiteProfileStore
 
 PROTOCOLS=("FTP","SSH","HTTPS","MYSQL","SQLITE","SMTP","TCP")
 DEFAULT_PORT={"FTP":21,"SSH":22,"HTTPS":443,"MYSQL":3306,"SMTP":465,"TCP":0}
@@ -121,8 +122,35 @@ def normalize(obj):
 class UserConnectionRegistry:
     def __init__(self,identity=None,path=None):
         self.identity=identity or MachineIdentity.current()
-        self.path=Path(path) if path else xdg_config()/"connections-v2.json"
+        if path is None:
+            self.suite=SuiteProfileStore(uid=self.identity.uid,username=self.identity.username)
+            self.path=self.suite.connections_path
+            self._migrate_from=xdg_config()/"connections-v2.json"
+        else:
+            self.suite=None
+            self.path=Path(path)
+            self._migrate_from=None
+    def _migrate_once(self):
+        """Import existing v2 metadata atomically; never discard legacy copy."""
+        if (self._migrate_from is None or self.path.exists()
+                or not self._migrate_from.is_file()):
+            return
+        legacy=self._migrate_from
+        if legacy.is_symlink() or legacy.stat().st_mode & 0o077:
+            return
+        try:
+            obj=json.loads(legacy.read_text(encoding="utf-8"))
+            if obj.get("owner_uid")!=self.identity.uid or obj.get("schema")!=1:
+                return
+            rows=[]
+            for entry in obj.get("connections",[]):
+                rows.append(normalize(ConnectionDefinition(**entry)))
+            self.save(rows)
+        except (OSError,ValueError,TypeError,KeyError):
+            return
+
     def list(self):
+        self._migrate_once()
         try:
             data=json.loads(self.path.read_text(encoding="utf-8"))
             if data.get("schema")!=1 or data.get("owner_uid")!=self.identity.uid:
