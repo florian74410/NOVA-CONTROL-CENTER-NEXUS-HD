@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, Signal, QObject, QSize, QRectF, QPoint, QEvent, Q
 from PySide6.QtGui import QFont, QKeySequence, QAction, QPainter, QIcon, QMovie, QPen, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout,
-    QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame, QWidgetAction
+    QVBoxLayout, QSplitter, QMenu, QMessageBox, QInputDialog, QFrame, QWidgetAction, QStackedWidget
 )
 from .nexus_theme import PALETTES
 from .nexus_v2_paint import vector_icon, draw_frame
@@ -24,6 +24,11 @@ from .connection_session_cache import ConnectionSessionCache
 from .connection_manager_ui import ConnectionManagerDialog
 from .n3xv5_bridge import N3XV5Host
 from .native_apps_ui import NativeAppsDialog
+from .grid_engine import GridView, DisplayItem
+from .iatb_socket_client import HubSocketClient
+from .cli_cache import CliCacheManager
+from .layout_storage import save_layout, load_layout
+from .action_registry import ActionRegistry
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -287,6 +292,13 @@ class MainWindow(QMainWindow):
             lambda pos: self.make_menu().exec(self.catalog.mapToGlobal(pos))
         )
         left.addWidget(self.catalog,1)
+        self.vps_button=QPushButton("▦  VPS IATB")
+        self.vps_menu=QMenu(self.vps_button)
+        for category in ("Vitalité","Actions","Services","Journaux","Réseau"):
+            action=self.vps_menu.addAction(category)
+            action.triggered.connect(lambda checked=False, name=category: self.open_vps_category(name))
+        self.vps_button.setMenu(self.vps_menu)
+        left.addWidget(self.vps_button)
         self.empty_catalog=QLabel("Aucun module installé.\n\nAjoute une application Qt\npour la voir ici.")
         self.empty_catalog.setWordWrap(True)
         self.empty_catalog.setObjectName("hint")
@@ -315,7 +327,25 @@ class MainWindow(QMainWindow):
         self.desktop.customContextMenuRequested.connect(
             lambda pos: self.make_menu().exec(self.desktop.mapToGlobal(pos))
         )
-        splitter.addWidget(self.desktop)
+        self.grid_view=GridView(self)
+        self.iatb_socket=HubSocketClient(parent=self)
+        self.cli_cache=CliCacheManager(parent=self)
+        self.cli_cache.register('iatb-cli',self.iatb_socket)
+        self.cli_cache.updated.connect(self._on_cli_cache_updated)
+        self.cli_cache.failed.connect(self._on_cli_cache_error)
+        self.iatb_tiles={}
+        self.action_registry=ActionRegistry(self)
+        self._layout_restoring=False
+        self._restore_grid_layout()
+        self.grid_view.grid.changed.connect(self._save_grid_layout)
+        self.iatb_poll=QTimer(self)
+        self.iatb_poll.setInterval(60000)
+        self.iatb_poll.timeout.connect(self._poll_iatb)
+        self.iatb_poll.start()
+        self.workspace_stack=QStackedWidget(self)
+        self.workspace_stack.addWidget(self.desktop)
+        self.workspace_stack.addWidget(self.grid_view)
+        splitter.addWidget(self.workspace_stack)
         splitter.setStretchFactor(1,1)
         splitter.setSizes([223,1200])
         self.splitter=splitter
@@ -370,6 +400,93 @@ class MainWindow(QMainWindow):
     def toggle_maximized(self):
         if self.isMaximized():self.showNormal()
         else:self.showMaximized()
+    def _save_grid_layout(self):
+        if self._layout_restoring:
+            return
+        frames=[]
+        for tile in self.grid_view.grid.tiles.values():
+            info=self.iatb_tiles.get(tile.key,{})
+            category=info.get("category","")
+            frames.append({"title":tile.title,"x":tile.xcell,"y":tile.ycell,
+                           "w":tile.wcell,"h":tile.hcell,
+                           "app_id":"iatb-cli" if category else "",
+                           "category":category})
+        try:
+            save_layout(frames)
+        except OSError:
+            pass
+
+    def _restore_grid_layout(self):
+        self._layout_restoring=True
+        try:
+            try:
+                frames=load_layout()
+            except (OSError,ValueError,KeyError,TypeError):
+                frames=[]
+            mapping={"Vitalité":["vps.status","vps.resources","gen1.status"],
+                     "Actions":["gen1.status"],
+                     "Services":["vps.ps","gen1.apps.health"],
+                     "Journaux":["vps.logs.fundamental"],
+                     "Réseau":["gen1.caddy.check"]}
+            for frame in frames:
+                tile=self.grid_view.grid.add_at(frame["title"],frame["x"],frame["y"],
+                                                frame["w"],frame["h"])
+                if tile and frame.get("app_id")=="iatb-cli":
+                    category=frame.get("category","")
+                    self.iatb_tiles[tile.key]={"category":category,"methods":mapping.get(category,[]),"results":{}}
+        finally:
+            self._layout_restoring=False
+
+    def open_vps_category(self,category):
+        methods={
+            "Vitalité":["vps.status","vps.resources","gen1.status"],
+            "Actions":["gen1.status"],
+            "Services":["vps.ps","gen1.apps.health"],
+            "Journaux":["vps.logs.fundamental"],
+            "Réseau":["gen1.caddy.check"],
+        }.get(category,["vps.status"])
+        tile=self.grid_view.grid.add_tile("VPS IATB / "+category,3,3,
+                                          [DisplayItem("Connexion","En attente…",1)])
+        self.workspace_stack.setCurrentWidget(self.grid_view)
+        if tile is None:
+            self.notifications.add("Grille pleine : aucune zone 3 x 3 disponible.","warning")
+            return
+        self.iatb_tiles[tile.key]={"category":category,"methods":methods,"results":{}}
+        self._save_grid_layout()
+        self._poll_iatb()
+
+    def _poll_iatb(self):
+        names=set()
+        for key,info in list(self.iatb_tiles.items()):
+            if key not in self.grid_view.grid.tiles:
+                self.iatb_tiles.pop(key,None)
+            else:
+                names.update(info["methods"])
+        if names:
+            self.cli_cache.get("iatb-cli",sorted(names))
+
+    def _on_cli_cache_updated(self,app_id,values):
+        if app_id != "iatb-cli":
+            return
+        for key,info in list(self.iatb_tiles.items()):
+            tile=self.grid_view.grid.tiles.get(key)
+            if tile is None:
+                continue
+            items=[]
+            for name in info["methods"]:
+                item=values.get(name)
+                if item is not None:
+                    value=str(item.get("value","")).strip().replace("\\n"," | ")[:200]
+                    if item.get("stale"):
+                        value += " (cache)"
+                    items.append(DisplayItem(name,value,int(item.get("priority",1))))
+            if items:
+                tile.set_data(items)
+
+    def _on_cli_cache_error(self,app_id,error):
+        if app_id == "iatb-cli":
+            self.status_info.setText("IATB-CLI : connexion en attente")
+
     def open_application(self,app_id):
         if app_id not in self.desktop.registry:return
         self.desktop.open_app(app_id)

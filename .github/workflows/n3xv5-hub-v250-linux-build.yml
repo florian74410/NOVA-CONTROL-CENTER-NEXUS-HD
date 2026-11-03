@@ -1,7 +1,7 @@
 name: N3XV5 HUB 2.5 Linux Qt / IPC / Native Apps
 on:
   push:
-    branches: [work/n3xv5-phase2-4-hub-auth-apps]
+    branches: [work/n3xv5-phase2-4-hub-auth-apps, work/n3xv5-grid-cli-protocol-v260]
   workflow_dispatch:
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip build pytest pytest-qt
           python -m pip install -e '.[test]'
           python -m compileall -q src
-          PYTHONPATH=N3XV5/Core python -m pytest -q tests/test_connection_preload.py tests/test_core_services.py tests/test_control_panels.py tests/test_nexus_crashfix.py tests/test_suite_portability.py tests/test_n3xv5_hub_phase234.py N3XV5/tests/test_foundation.py
+          PYTHONPATH=N3XV5/Core python -m pytest -q tests/test_connection_preload.py tests/test_core_services.py tests/test_control_panels.py tests/test_nexus_crashfix.py tests/test_suite_portability.py tests/test_n3xv5_hub_phase234.py tests/test_n3xv5_cli_grid.py N3XV5/tests/test_foundation.py
           python -m build --wheel --outdir dist
       - name: Compile standalone Linux binary
         run: |
