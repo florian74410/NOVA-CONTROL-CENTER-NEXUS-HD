@@ -1,9 +1,9 @@
 """Frameless resizable MDI subwindows and drag/drop workspace."""
 from PySide6.QtCore import Qt, QPoint, QMimeData, Signal
-from PySide6.QtGui import QDrag, QPainter, QColor, QPen
+from PySide6.QtGui import QDrag, QPainter, QColor, QPen, QPixmap, QBrush
 from PySide6.QtWidgets import (
     QMdiArea, QMdiSubWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSizeGrip, QFrame, QListWidget, QListWidgetItem
+    QPushButton, QFrame, QListWidget, QListWidgetItem
 )
 from .nexus_theme import CircuitCanvas, rgba
 
@@ -36,6 +36,35 @@ class AppRail(QListWidget):
         drag = QDrag(self)
         drag.setMimeData(data)
         drag.exec(Qt.DropAction.CopyAction)
+
+class ResizeGrip(QLabel):
+    """Resizes the actual MDI subwindow, not merely its content widget."""
+    def __init__(self, host):
+        super().__init__("◢", host)
+        self.host = host
+        self.setToolTip("Redimensionner la fenêtre")
+        self.setFixedSize(18, 18)
+        self.setStyleSheet("color:#6DCEFF;background:transparent;")
+        self.anchor = None
+        self.initial = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.anchor = event.globalPosition().toPoint()
+            self.initial = self.host.size()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self.anchor is not None and self.initial is not None:
+            delta = event.globalPosition().toPoint() - self.anchor
+            self.host.resize(max(self.host.minimumWidth(), self.initial.width()+delta.x()),
+                             max(self.host.minimumHeight(), self.initial.height()+delta.y()))
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.anchor = None
+        self.initial = None
+        event.accept()
 
 class TitleBar(QFrame):
     def __init__(self, host, title, icon):
@@ -104,12 +133,22 @@ class NovaSubWindow(QMdiSubWindow):
         grip_row = QHBoxLayout()
         grip_row.setContentsMargins(0, 0, 1, 1)
         grip_row.addStretch()
-        grip = QSizeGrip(container)
+        grip = ResizeGrip(self)
         grip.setFixedSize(16, 16)
         grip_row.addWidget(grip)
         layout.addLayout(grip_row)
         self.setWidget(container)
-        self.resize(490, 330)
+        self.resize(490, 330)\n        self.apply_palette(None)
+
+    def apply_palette(self, palette):
+        accent = palette.accent if palette else "#00CFFF"
+        edge = palette.edge if palette else "#28A8DE"
+        self.widget().setStyleSheet(
+            f"QFrame#novaAppShell {{background:#091C30;border:1px solid {edge};border-radius:5px;}}"
+        )
+        for title in self.widget().findChildren(TitleBar):
+            title.setStyleSheet(f"QFrame {{background:#10304A;border-bottom:1px solid {accent};}}")
+            title.title.setStyleSheet(f"color:{accent};font-size:11px;font-weight:bold;border:0;")
 
     def toggle_maximized(self):
         if self.isMaximized():
@@ -131,7 +170,45 @@ class NovaDesktop(QMdiArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setActivationOrder(QMdiArea.WindowOrder.StackingOrder)
         self.setStyleSheet("QMdiArea { background: #07101E; border: 1px solid #276B8C; }")
-        self.subWindowActivated.connect(lambda _: self.number_changed.emit(len(self.subWindowList())))
+        self.subWindowActivated.connect(lambda _: self.number_changed.emit(len(self.subWindowList())))\n        self._refresh_pcb()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._refresh_pcb()
+
+    def set_palette(self, palette):
+        self.theme = palette
+        self._refresh_pcb()
+        for win in self.subWindowList():
+            if isinstance(win, NovaSubWindow):
+                win.apply_palette(palette)
+
+    def _refresh_pcb(self):
+        """Pre-render a lightweight electronic PCB texture on resizing only."""
+        width = max(1, self.viewport().width())
+        height = max(1, self.viewport().height())
+        pix = QPixmap(width, height)
+        pix.fill(QColor(self.theme.background))
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for i in range(10):
+            x = 26 + i * 37
+            y = 30 + i * 19
+            pen = QPen(QColor(self.theme.accent), 1)
+            color = QColor(self.theme.accent)
+            color.setAlpha(30 + (i % 4) * 10)
+            pen.setColor(color)
+            painter.setPen(pen)
+            painter.drawLine(x, 0, x, y)
+            painter.drawLine(x, y, x+20, y+20)
+            painter.drawLine(x+20, y+20, x+140, y+20)
+            painter.drawEllipse(x+137, y+17, 5, 5)
+            xr = width - x
+            yr = height - y
+            painter.drawLine(xr, height, xr, yr)
+            painter.drawLine(xr, yr, xr-120, yr)
+        painter.end()
+        self.setBackground(QBrush(pix))
 
     def open_app(self, app_id, pos=None):
         if app_id not in self.app_map:
