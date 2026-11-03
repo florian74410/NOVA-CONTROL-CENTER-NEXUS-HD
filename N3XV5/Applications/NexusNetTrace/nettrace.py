@@ -458,11 +458,14 @@ def present(obj, json_mode: bool):
 def publish_to_hub(command,output):
     """Send a bounded, redacted diagnostic using the inherited Unix socket."""
     from n3xv5_core.ipc import PeripheralClient
-    if command not in ("probe","dns","tcp","tls","har","correlate"):
+    if command not in ("probe","dns","tcp","tls","har","correlate","mesh"):
         raise ValueError("Unsupported publication")
     if not os.environ.get("N3XV5_IPC_FD"):
         raise RuntimeError("The CLI must be launched by the authenticated HUB")
     data=dict(output)
+    if command=="mesh":
+        data["edges"]=(data.get("edges") or [])[:25]
+        data["nodes"]=(data.get("nodes") or [])[:20]
     if command=="har":
         data["slowest"]=(data.get("slowest") or [])[:5]
         data["failures"]=(data.get("failures") or [])[:3]
@@ -475,7 +478,11 @@ def publish_to_hub(command,output):
     while len(json.dumps({"api":1,"id":"0"*16,"app_id":"nexus-nettrace",
                           "method":"nettrace.publish","params":with_report},
                          ensure_ascii=False).encode("utf-8"))>7000:
-        if command=="har" and data.get("slowest"):
+        if command=="mesh" and data.get("edges"):
+            data["edges"].pop()
+        elif command=="mesh" and data.get("nodes"):
+            data["nodes"].pop()
+        elif command=="har" and data.get("slowest"):
             data["slowest"].pop()
         elif command=="har" and data.get("failures"):
             data["failures"].pop()
@@ -507,6 +514,11 @@ def main(argv=None):
     p.add_argument("--engine", choices=("auto","curl","stdlib"), default="auto", help="stdlib is fully portable HTTP/1.1; curl supports richer HTTP/2 timing")
     p.add_argument("--origin", help="Optional CORS Origin header")
     p.add_argument("--request-id")
+    p = sub.add_parser("mesh", help="Analyze engine-to-engine links across local and VPS agents")
+    p.add_argument("topology", help="JSON file describing VPS engines and edges")
+    p.add_argument("--allow-remote",action="store_true",help="Explicitly authorize remote SSH probes")
+    p = sub.add_parser("mesh-agent", help="Restricted remote probe; accepts one allowlisted edge id on stdin")
+    p.add_argument("--config",default="/etc/n3xv5/nettrace-agent.json")
     p = sub.add_parser("hub", help="Query active N3XV5 HUB session over private IPC")
     p.add_argument("--connections", action="store_true", help="List permitted nonsecret connection descriptors")
     p = sub.add_parser("dns", help="Resolve host A/AAAA")
@@ -529,6 +541,23 @@ def main(argv=None):
             runner=probe if selected=="curl" else probe_stdlib
             output = runner(args.url, args.method, args.timeout,
                             request_id=args.request_id, origin=args.origin)
+        elif args.command == "mesh":
+            import mesh
+            topology=mesh.load_config(args.topology)
+            output=mesh.run_mesh(topology,probe_stdlib,dns_check,tcp_check,tls_check,
+                                 allow_remote=args.allow_remote)
+        elif args.command == "mesh-agent":
+            import mesh
+            request=sys.stdin.buffer.readline(4096)
+            if not request.endswith(b"\n"):
+                raise ValueError("Invalid remote agent request")
+            obj=json.loads(request)
+            if not isinstance(obj,dict) or set(obj)!={"edge_id"}:
+                raise ValueError("Remote agent accepts only an edge id")
+            output=mesh.agent_once(args.config,obj["edge_id"],
+                                   probe_stdlib,dns_check,tcp_check,tls_check)
+            print(json.dumps(output,ensure_ascii=False,separators=(",",":")))
+            return 0
         elif args.command == "hub":
             from n3xv5_core.ipc import PeripheralClient
             if not __import__("os").environ.get("N3XV5_IPC_FD"):
