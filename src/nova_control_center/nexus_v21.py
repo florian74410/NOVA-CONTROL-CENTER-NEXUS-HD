@@ -25,6 +25,7 @@ from .connection_manager_ui import ConnectionManagerDialog
 from .n3xv5_bridge import N3XV5Host
 from .native_apps_ui import NativeAppsDialog
 from .grid_engine import GridView
+from .nettrace_hud import NetTracePanel
 from .suite_profile import SuiteProfileStore, SUITE_ID
 from .online_updates import UpdateDialog, UpdateWorker, newer
 
@@ -143,6 +144,7 @@ class RoutedBar(QWidget):
         else:super().mouseDoubleClickEvent(event)
 
 class MainWindow(QMainWindow):
+    nettrace_received=Signal(object)
     def __init__(self):
         super().__init__()
         self.setWindowTitle("N3XV5 N0v4 HUD — HUB 2.5.0")
@@ -161,7 +163,8 @@ class MainWindow(QMainWindow):
             UserConnectionRegistry(),
             event_callback=lambda name,data:self.bus.publish(name,data))
         self.n3xv5=N3XV5Host(self.suite_profile_store,self.connection_cache,
-                             self.session_manager)
+                             self.session_manager,
+                             event_callback=lambda app,payload:self.nettrace_received.emit(payload))
         self.registry=ApplicationRegistry()  # zero fake modules
         self.state=self.load_state()
         self.theme_name=self.state.get("theme","ElectroBlueNEON")
@@ -169,6 +172,7 @@ class MainWindow(QMainWindow):
             self.theme_name="ElectroBlueNEON"
         self.palette=PALETTES[self.theme_name]
         self._build()
+        self.nettrace_received.connect(self._on_nettrace_report)
         self.set_theme(self.theme_name)
         self.desktop.effect_enabled=bool(self.state.get("animations",True))
         from PySide6.QtCore import QSettings
@@ -222,6 +226,7 @@ class MainWindow(QMainWindow):
         for label,ico,action in (
             ("Bureau","home",self.show_workspace),
             ("Applications natives","apps",self.show_catalog),
+            ("NetTrace","network",self.show_nettrace),
             ("Espaces","layers",self.show_workspaces),
             ("Paramètres","settings",self.show_settings),
             ("Sessions","shield",self.show_sessions),
@@ -323,10 +328,12 @@ class MainWindow(QMainWindow):
         self.desktop.customContextMenuRequested.connect(
             lambda pos: self.make_menu().exec(self.desktop.mapToGlobal(pos))
         )
-        self.grid_view=GridView(self)
+        self.nettrace_panel=NetTracePanel(self)
+        self.grid_view=self.nettrace_panel.grid_view
+        self.nettrace_panel.requested.connect(self._run_nettrace)
         self.workspace_stack=QStackedWidget(self)
         self.workspace_stack.addWidget(self.desktop)
-        self.workspace_stack.addWidget(self.grid_view)
+        self.workspace_stack.addWidget(self.nettrace_panel)
         splitter.addWidget(self.workspace_stack)
         splitter.setStretchFactor(1,1)
         splitter.setSizes([223,1200])
@@ -385,7 +392,7 @@ class MainWindow(QMainWindow):
     def open_vps_category(self,category):
         # Placeholder category until IATB-CLI catalog has been mapped.
         tile=self.grid_view.grid.add_tile("VPS IATB / "+category,2,3)
-        self.workspace_stack.setCurrentWidget(self.grid_view)
+        self.workspace_stack.setCurrentWidget(self.nettrace_panel)
         if tile is None:
             self.notifications.add("Grille pleine : aucune zone 2 x 3 disponible.","warning")
         else:
@@ -401,6 +408,70 @@ class MainWindow(QMainWindow):
         self.desktop.cascadeSubWindows()
     def show_workspace(self):
         self.notifications.add("Bureau NOVA prêt — dépose ici tes applications Qt.","success")
+    def show_nettrace(self):
+        if self.session_manager.session.locked:
+            self._unlock_or_exit()
+            if self.session_manager.session.locked:return
+        self.workspace_stack.setCurrentWidget(self.nettrace_panel)
+        self.nettrace_panel.new_tile()
+
+    def _on_nettrace_report(self,payload):
+        if self.session_manager.session.locked:
+            return
+        self.nettrace_panel.apply_report(payload)
+        self.workspace_stack.setCurrentWidget(self.nettrace_panel)
+        self._update_status()
+
+    def _run_nettrace(self,command,target):
+        if self.session_manager.session.locked:
+            self.nettrace_panel.status.setText("HUB verrouillé : authentification requise")
+            return
+        import json as _json
+        from urllib.parse import urlsplit
+        if command not in ("probe","dns","tcp","tls","har","correlate"):
+            self.nettrace_panel.status.setText("Commande NetTrace inconnue")
+            return
+        try:
+            record=self.n3xv5.package_manager.list().get("nexus-nettrace")
+            if not record or record["state"]!="installed":
+                self.nettrace_panel.status.setText(
+                    "Installe NetTrace .deb dans Applications natives et autorise nettrace.publish")
+                return
+            args=["--hub-publish",command]
+            if command=="correlate":
+                paths=_json.loads(target)
+                if not isinstance(paths,list) or len(paths)!=2:
+                    raise ValueError("Deux chemins de fichiers JSON requis")
+                args.extend(paths)
+            elif command in ("tcp","tls"):
+                if ":" in target:
+                    hostname,port=target.rsplit(":",1)
+                    if not port.isdigit() or not 1<=int(port)<=65535:
+                        raise ValueError("Port invalide")
+                else:
+                    hostname=target
+                    port="443" if command=="tls" else None
+                if not hostname:raise ValueError("Hôte manquant")
+                args.append(hostname)
+                if command=="tcp":
+                    if port is None:raise ValueError("Précise host:port")
+                    args.append(port)
+                elif port:
+                    args.extend(["--port",port])
+            else:
+                args.append(target)
+            manifest=record["manifest"]
+            rel=manifest["executable"]
+            if rel.startswith("bin/"):
+                executable=Path("/usr")/rel
+            else:
+                executable=Path("/opt/n3xv5")/"nexus-nettrace"/rel
+            pid=self.n3xv5.launch("nexus-nettrace",executable,extra_args=args)
+            self.nettrace_panel.status.setText(
+                "NETTRACE / "+command+" · processus "+str(pid)+" · résultat en attente")
+        except (OSError,ValueError,KeyError,PermissionError,TypeError,NotImplementedError) as exc:
+            self.nettrace_panel.status.setText("NetTrace refusé : "+str(exc)[:140])
+
     def show_catalog(self):
         if self.session_manager.session.locked:
             self._unlock_or_exit()
@@ -578,6 +649,7 @@ class MainWindow(QMainWindow):
             ("⚙  Configuration du Core",self.show_core_preferences),
             ("◈  Verrouiller NOVA",self.lock_session),
             ("▦  Bibliothèque d'applications",self.show_catalog),
+            ("◈  NetTrace / Réseau 2D",self.show_nettrace),
             ("▣  Disposition mosaïque",self.tile_windows),
             ("▤  Disposition cascade",self.cascade_windows),
             ("↧  Sauvegarder l'espace",self.save_state),
@@ -614,6 +686,7 @@ class MainWindow(QMainWindow):
             "Créer une connexion":self.show_connection_manager,
             "Logs SQLite":self.show_logs,
             "Mises à jour en ligne":self.show_updates,
+            "NetTrace / Réseau 2D":self.show_nettrace,
             "Configuration du Core":self.show_core_preferences,
             "Verrouiller la session":self.lock_session,
             "Tester notification succès":lambda:self.notifications.add("Succès","success"),
