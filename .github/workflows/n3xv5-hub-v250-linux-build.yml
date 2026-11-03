@@ -34,7 +34,7 @@ jobs:
           python -m pip install 'pyinstaller>=6.10,<7'
           ASSET_ARGS=()
           if [ -d Assets ]; then ASSET_ARGS=(--add-data "Assets:Assets"); fi
-          python -m PyInstaller --noconfirm --clean --onedir --name nova-control-center --collect-submodules nova_control_center --collect-submodules n3xv5_core "${ASSET_ARGS[@]}" build/nova_entry.py
+          python -m PyInstaller --noconfirm --clean --onedir --name nova-control-center --paths "$PWD/src" --paths "$PWD/N3XV5/Core" --hidden-import nova_control_center.nexus_v21 --hidden-import n3xv5_core.ipc --collect-submodules nova_control_center --collect-submodules n3xv5_core "${ASSET_ARGS[@]}" build/nova_entry.py
       - name: Smoke test standalone Linux binary
         run: |
           timeout 12s dist/nova-control-center/nova-control-center --help >/tmp/nova-smoke.log 2>&1 || CODE=$?
