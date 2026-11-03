@@ -8,9 +8,9 @@ A native **Qt 6 / PySide6** modular Linux workspace with a dramatic Cyberpunk El
 - Header/navbar, left draggable app launcher, central floating multi-window desktop, compact 11pt status strip.
 - Create several instances of the same app; drag/resize/minimize/maximize, mosaic/cascade, right-click menus and Ctrl+K command palette.
 - ElectroBlueNEON / RougeERROR live switch; independent V2 persistence of layout and palette.
-- Four local functional demonstration widgets (Terminal/Explorer/Widget Lab/NEXUS Event Monitor); simulated file-change notifications through the local event bus.
+- Four visual-only demonstration panels (Design Lab / 3D Reactor / PCB Routing / Widget Kit), without mock SSH or remote operations. Optional Qt Quick 3D reactor, with safe 2D fallback.
 
-**Important:** V2 is a visual foundation, not a remote administration release. SSH/SFTP/Docker are not connected. The three source image boards informed the vector renderer, but are not yet sliced and embedded as pixel-perfect graphical sprites.
+**Important:** V2 is a visual foundation, not a remote administration release. SSH/SFTP/Docker are not connected. The supplied reference image and source boards informed the vector renderer, but are not yet sliced and embedded as pixel-perfect graphical sprites.
 
 ## Install on Linux Mint XFCE
 
@@ -25,3 +25,13 @@ nova-control-center
 ```
 
 [Implementation details](docs/NEXUS_V2.md). Testing: `QT_QPA_PLATFORM=offscreen pytest -q tests/test_nexus_v2.py`.
+
+## Optional Qt Quick 3D
+
+The application defaults to a light 2D reactor preview, suitable for XFCE and systems without 3D acceleration. Enable the Qt Quick 3D scene with:
+
+```bash
+NOVA_ENABLE_3D=1 nova-control-center
+```
+
+Qt Quick 3D and the appropriate system OpenGL drivers must be available; the main UI remains Qt Widgets. If the scene cannot initialize, the reactor panel falls back to 2D. All panels are visual UI samples, not connected applications.
