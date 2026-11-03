@@ -356,6 +356,8 @@ def main(argv=None):
     p.add_argument("--timeout", type=float, default=15)
     p.add_argument("--origin", help="Optional CORS Origin header")
     p.add_argument("--request-id")
+    p = sub.add_parser("hub", help="Query active N3XV5 HUB session over private IPC")
+    p.add_argument("--connections", action="store_true", help="List permitted nonsecret connection descriptors")
     p = sub.add_parser("dns", help="Resolve host A/AAAA")
     p.add_argument("host")
     p = sub.add_parser("tcp", help="Check TCP connection")
@@ -374,6 +376,16 @@ def main(argv=None):
         if args.command == "probe":
             output = probe(args.url, args.method, args.timeout,
                            request_id=args.request_id, origin=args.origin)
+        elif args.command == "hub":
+            from n3xv5_core.ipc import PeripheralClient
+            if not __import__("os").environ.get("N3XV5_IPC_FD"):
+                raise RuntimeError("Launch NetTrace from the authenticated HUB for IPC")
+            client = PeripheralClient()
+            try:
+                method = "connections.list" if args.connections else "profile.info"
+                output = client.request(method)
+            finally:
+                client.close()
         elif args.command == "dns":
             output = dns_check(args.host)
         elif args.command == "tcp":
