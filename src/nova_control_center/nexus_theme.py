@@ -1,8 +1,8 @@
 """NEXUS HD 0.8 inspired, resolution-independent Qt theme engine."""
 from dataclasses import dataclass
 import math
-from PySide6.QtCore import Qt, QRectF, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen, QLinearGradient, QPainterPath
+from PySide6.QtCore import Qt, QRectF, QTimer, QPointF
+from PySide6.QtGui import QColor, QPainter, QPen, QLinearGradient, QPainterPath, QFont, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 @dataclass(frozen=True)
@@ -109,3 +109,36 @@ class CircuitCanvas(QWidget):
             p.end()
         qp = QPainter(self)
         qp.drawPixmap(0, 0, self._cached)
+
+class NovaLogo(QWidget):
+    """Scalable NEXUS emblem, drawn as vector geometry; no font-dependent symbol."""
+    def __init__(self, palette, parent=None):
+        super().__init__(parent)
+        self.palette = palette
+        self.setFixedSize(40, 40)
+
+    def set_palette(self, palette):
+        self.palette = palette
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        pts = [QPointF(20, 3), QPointF(35, 11), QPointF(35, 29),
+               QPointF(20, 37), QPointF(5, 29), QPointF(5, 11)]
+        for i, point in enumerate(pts):
+            if i == 0:
+                path.moveTo(point)
+            else:
+                path.lineTo(point)
+        path.closeSubpath()
+        for width, alpha in ((7, 26), (4, 65), (1.7, 240)):
+            p.setPen(QPen(rgba(self.palette.accent, alpha), width))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(path)
+        font = QFont("DejaVu Sans", 17, QFont.Weight.Bold)
+        p.setFont(font)
+        p.setPen(rgba(self.palette.bright))
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "N")
+        p.end()
