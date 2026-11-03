@@ -217,6 +217,106 @@ def probe(url: str, method: str = "GET", timeout: float = 15, curl_binary: str =
         return output
 
 
+def probe_stdlib(url: str, method: str = "GET", timeout: float = 15,
+                 request_id: str | None = None, origin: str | None = None):
+    """Portable HTTP/1.1 fallback: Python stdlib, TLS verified, no curl needed.
+
+    This is an active direct request, not a passive browser sniff or proxy.
+    Redirects are reported rather than followed. No body is retained.
+    """
+    import http.client
+    validate_url(url)
+    method = method.upper()
+    if method not in ("GET", "HEAD", "OPTIONS"):
+        raise ValueError("Only GET, HEAD and OPTIONS supported")
+    if not 1 <= timeout <= 120:
+        raise ValueError("Timeout must be between 1 and 120")
+    if origin and ("\\r" in origin or "\\n" in origin or len(origin) > 255):
+        raise ValueError("Invalid Origin")
+    parts = urlsplit(url)
+    host = parts.hostname
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    request_id = request_id or "n3xv5-" + uuid.uuid4().hex[:20]
+    if not TRACE_ID.fullmatch(request_id):
+        raise ValueError("Invalid request ID")
+    result = {"target": safe_url(url), "request_id": request_id,
+              "method": method, "engine": "python-stdlib-http1",
+              "http_version": "1.1", "remote_ip": "", "status": 0,
+              "response_headers": {}, "timings_ms": {}, "error": None,
+              "size_download_bytes": 0}
+    start = time.monotonic()
+    sock = None
+    try:
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        dns_end = time.monotonic()
+        result["timings_ms"]["namelookup_ms"] = round((dns_end-start)*1000,2)
+        last_error = None
+        for family,kind,proto,_,address in addresses:
+            candidate = socket.socket(family,kind,proto)
+            candidate.settimeout(timeout)
+            try:
+                candidate.connect(address)
+                sock = candidate
+                result["remote_ip"] = str(address[0])[:64]
+                break
+            except OSError as exc:
+                last_error = exc
+                candidate.close()
+        if sock is None:
+            raise ConnectionError("TCP connection refused or unreachable") from last_error
+        tcp_end = time.monotonic()
+        result["timings_ms"]["connect_ms"] = round((tcp_end-start)*1000,2)
+        if parts.scheme == "https":
+            context = ssl.create_default_context()
+            sock = context.wrap_socket(sock,server_hostname=host)
+            result["tls_version"] = sock.version()
+        tls_end = time.monotonic()
+        result["timings_ms"]["appconnect_ms"] = round((tls_end-start)*1000,2)
+        authority = host if ":" not in host else "["+host+"]"
+        if parts.port:
+            authority += ":" + str(parts.port)
+        target = (parts.path or "/") + ("?"+parts.query if parts.query else "")
+        if any(c in target for c in ("\\r","\\n")):
+            raise ValueError("Invalid request path")
+        headers = [f"{method} {target} HTTP/1.1", f"Host: {authority}",
+                   "Connection: close", "User-Agent: N3XV5-NetTrace/0.1",
+                   "X-Request-ID: "+request_id]
+        if origin:
+            headers.append("Origin: "+origin)
+        outgoing = ("\\r\\n".join(headers)+"\\r\\n\\r\\n").encode("utf-8")
+        sock.sendall(outgoing)
+        response = http.client.HTTPResponse(sock,method=method)
+        response.begin()
+        response_at = time.monotonic()
+        result["timings_ms"]["starttransfer_ms"] = round((response_at-start)*1000,2)
+        result["status"] = response.status
+        result["response_headers"] = safe_header_map(response.getheaders())
+        total = 0
+        while total <= 2*1024*1024:
+            chunk = response.read(65536)
+            if not chunk:
+                break
+            total += len(chunk)
+        if total > 2*1024*1024:
+            result["error"] = "response_size_limit"
+        result["size_download_bytes"] = total
+    except socket.gaierror:
+        result["error"] = "dns"
+    except ssl.SSLError:
+        result["error"] = "tls"
+    except (TimeoutError,socket.timeout):
+        result["error"] = "timeout"
+    except (ConnectionError, OSError):
+        result["error"] = "tcp"
+    finally:
+        if sock is not None:
+            sock.close()
+    result["duration_ms"] = round((time.monotonic()-start)*1000,2)
+    result["timings_ms"]["total_ms"] = result["duration_ms"]
+    result["diagnosis"] = diagnostic_for(result["status"],result["error"],result["duration_ms"])
+    return result
+
+
 def dns_check(host: str):
     if not host or len(host) > 253:
         raise ValueError("Invalid hostname")
@@ -354,6 +454,7 @@ def main(argv=None):
     p.add_argument("url")
     p.add_argument("--method", choices=("GET", "HEAD", "OPTIONS"), default="GET")
     p.add_argument("--timeout", type=float, default=15)
+    p.add_argument("--engine", choices=("auto","curl","stdlib"), default="auto", help="stdlib is fully portable HTTP/1.1; curl supports richer HTTP/2 timing")
     p.add_argument("--origin", help="Optional CORS Origin header")
     p.add_argument("--request-id")
     p = sub.add_parser("hub", help="Query active N3XV5 HUB session over private IPC")
@@ -374,8 +475,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "probe":
-            output = probe(args.url, args.method, args.timeout,
-                           request_id=args.request_id, origin=args.origin)
+            selected=("curl" if shutil.which("curl") else "stdlib") if args.engine=="auto" else args.engine
+            runner=probe if selected=="curl" else probe_stdlib
+            output = runner(args.url, args.method, args.timeout,
+                            request_id=args.request_id, origin=args.origin)
         elif args.command == "hub":
             from n3xv5_core.ipc import PeripheralClient
             if not __import__("os").environ.get("N3XV5_IPC_FD"):
