@@ -57,7 +57,7 @@ class CommandPalette(QDialog):
         for text,callback in self.entries:
             if value.lower() in text.lower():
                 item=QListWidgetItem(text)
-                item.setData(Qt.ItemDataRole.UserRole,len(self.list))
+                item.setData(Qt.ItemDataRole.UserRole,self.list.count())
                 self.list.addItem(item)
         if self.list.count():self.list.setCurrentRow(0)
     def _choose(self,item):
